@@ -131,7 +131,7 @@
 .cad-department-theme .cad-app-header-surface {
   position: relative;
   background-image:
-    linear-gradient(90deg, rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.16), rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.05) 22%, transparent 48%),
+    linear-gradient(90deg, rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.22), rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.08) 24%, transparent 52%),
     linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
   border-bottom-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.2);
   box-shadow: inset 0 -1px 0 rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.08);
@@ -141,7 +141,7 @@
   position: relative;
   border-right-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.18);
   background-image:
-    linear-gradient(180deg, rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.15), rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.04) 22%, transparent 40%),
+    linear-gradient(180deg, rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.22), rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.07) 24%, transparent 44%),
     linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0));
 }
 
@@ -171,8 +171,8 @@
 .cad-department-theme .cad-app-main-shell .bg-cad-card {
   background-image: linear-gradient(
     180deg,
-    rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.055),
-    rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.012) 35%,
+    rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.1),
+    rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.028) 38%,
     rgba(255,255,255,0) 78%
   );
 }
@@ -180,7 +180,7 @@
 .cad-department-theme .cad-app-main-shell .bg-cad-surface {
   background-image: linear-gradient(
     180deg,
-    rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.045),
+    rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.08),
     rgba(255,255,255,0) 72%
   );
 }
@@ -237,6 +237,68 @@
 .cad-department-theme .cad-app-page-content > * {
   position: relative;
   z-index: 2;
+}
+
+/* Stronger department-colour remap for shared CAD accent utilities on department pages */
+.cad-department-theme .bg-cad-accent {
+  background-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), var(--tw-bg-opacity, 1)) !important;
+}
+
+.cad-department-theme .bg-cad-accent-light {
+  background-color: rgba(var(--cad-dept-accent-light-rgb, 43, 127, 255), var(--tw-bg-opacity, 1)) !important;
+}
+
+.cad-department-theme .bg-cad-accent-dim {
+  background-color: rgba(var(--cad-dept-accent-dim-rgb, 3, 34, 97), var(--tw-bg-opacity, 1)) !important;
+}
+
+.cad-department-theme .bg-cad-accent\/5 { background-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.05) !important; }
+.cad-department-theme .bg-cad-accent\/10 { background-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.10) !important; }
+.cad-department-theme .bg-cad-accent\/15 { background-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.15) !important; }
+.cad-department-theme .bg-cad-accent\/20 { background-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.20) !important; }
+.cad-department-theme .bg-cad-accent\/30 { background-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.30) !important; }
+
+.cad-department-theme .text-cad-accent {
+  color: rgb(var(--cad-dept-accent-rgb, 0, 82, 194)) !important;
+}
+
+.cad-department-theme .text-cad-accent-light {
+  color: rgb(var(--cad-dept-accent-light-rgb, 43, 127, 255)) !important;
+}
+
+.cad-department-theme .border-cad-accent {
+  border-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), var(--tw-border-opacity, 1)) !important;
+}
+
+.cad-department-theme .border-cad-accent\/20 { border-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.20) !important; }
+.cad-department-theme .border-cad-accent\/30 { border-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.30) !important; }
+.cad-department-theme .border-cad-accent\/40 { border-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.40) !important; }
+.cad-department-theme .border-cad-accent\/50 { border-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.50) !important; }
+.cad-department-theme .border-cad-accent\/60 { border-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.60) !important; }
+
+.cad-department-theme .hover\:bg-cad-accent-light:hover {
+  background-color: rgba(var(--cad-dept-accent-light-rgb, 43, 127, 255), 1) !important;
+}
+
+.cad-department-theme .hover\:bg-cad-accent\/30:hover {
+  background-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.30) !important;
+}
+
+.cad-department-theme .hover\:border-cad-accent\/25:hover { border-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.25) !important; }
+.cad-department-theme .hover\:border-cad-accent\/40:hover { border-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.40) !important; }
+.cad-department-theme .hover\:border-cad-accent\/50:hover { border-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.50) !important; }
+.cad-department-theme .hover\:border-cad-accent\/60:hover { border-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.60) !important; }
+
+.cad-department-theme .focus\:border-cad-accent:focus {
+  border-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 1) !important;
+}
+
+.cad-department-theme .ring-cad-accent {
+  --tw-ring-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 1) !important;
+}
+
+.cad-department-theme .ring-cad-accent\/30 {
+  --tw-ring-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.30) !important;
 }
 
 .cad-admin-route .cad-app-main-shell {

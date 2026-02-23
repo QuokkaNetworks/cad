@@ -54,6 +54,29 @@ function getUserFiveMOnlineStatus(user) {
   return { online: true, link, reason: '' };
 }
 
+function parseActiveDepartmentHeader(req) {
+  const raw = req?.headers?.['x-cad-active-department-id'];
+  const text = Array.isArray(raw) ? raw[0] : raw;
+  const parsed = Number.parseInt(String(text || '').trim(), 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) return 0;
+  return parsed;
+}
+
+function isDispatchDepartmentRequest(req) {
+  const departments = Array.isArray(req?.user?.departments) ? req.user.departments : [];
+  if (!departments.length) return false;
+
+  const activeDepartmentId = parseActiveDepartmentHeader(req);
+  if (activeDepartmentId > 0) {
+    const activeDepartment = departments.find((dept) => Number(dept?.id) === activeDepartmentId);
+    return !!activeDepartment?.is_dispatch;
+  }
+
+  // Fallback for older clients that do not send the active department header.
+  // Only bypass if the user has dispatch-only access.
+  return departments.length > 0 && departments.every((dept) => !!dept?.is_dispatch);
+}
+
 function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
   const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
@@ -117,6 +140,11 @@ function requireAdmin(req, res, next) {
 }
 
 function requireFiveMOnline(req, res, next) {
+  if (isDispatchDepartmentRequest(req)) {
+    req.fivemLink = null;
+    req.fivemOnlineBypass = 'dispatch_department';
+    return next();
+  }
   const status = getUserFiveMOnlineStatus(req.user);
   if (!status.online) {
     return res.status(403).json({

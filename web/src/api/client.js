@@ -1,4 +1,5 @@
 const TOKEN_KEY = 'cad_token_legacy';
+const ACTIVE_DEPT_STORAGE_KEY = 'cad_active_department_id';
 
 class ApiError extends Error {
   constructor(message, options = {}) {
@@ -29,6 +30,16 @@ async function request(url, options = {}) {
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   if (!isFormData && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
+  }
+
+  try {
+    const rawActiveDepartmentId = localStorage.getItem(ACTIVE_DEPT_STORAGE_KEY) || '';
+    const activeDepartmentId = Number.parseInt(String(rawActiveDepartmentId).trim(), 10);
+    if (Number.isInteger(activeDepartmentId) && activeDepartmentId > 0 && !headers['X-CAD-Active-Department-ID']) {
+      headers['X-CAD-Active-Department-ID'] = String(activeDepartmentId);
+    }
+  } catch {
+    // Ignore storage access issues and continue without department context.
   }
 
   const res = await fetch(url, { ...options, headers, credentials: 'include' });

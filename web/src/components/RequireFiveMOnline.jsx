@@ -1,9 +1,12 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useDepartment } from '../context/DepartmentContext';
 
 export default function RequireFiveMOnline({ children, featureLabel = 'this area' }) {
   const { user, isFiveMOnline } = useAuth();
+  const { activeDepartment } = useDepartment();
+  const isDispatchWorkspace = !!activeDepartment?.is_dispatch;
 
   const reasonLabel = useMemo(() => {
     const reason = String(user?.fivem_online_reason || '').trim();
@@ -13,7 +16,7 @@ export default function RequireFiveMOnline({ children, featureLabel = 'this area
     return 'You are not currently connected to the game server.';
   }, [user?.fivem_online_reason]);
 
-  if (isFiveMOnline) return children;
+  if (isFiveMOnline || isDispatchWorkspace) return children;
 
   return (
     <div className="h-full flex items-center justify-center py-8">
@@ -50,4 +53,3 @@ export default function RequireFiveMOnline({ children, featureLabel = 'this area
     </div>
   );
 }
-
