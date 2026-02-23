@@ -336,82 +336,101 @@ function SetupPrompt({ user }) {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Same hero band styling for consistency */}
-      <div
-        className="relative overflow-hidden flex-none"
-        style={{
-          background: 'linear-gradient(135deg, rgba(3,34,97,0.7) 0%, rgba(0,82,194,0.25) 50%, rgba(10,15,26,0) 100%)',
-          borderBottom: '1px solid rgba(0,82,194,0.18)',
-        }}
-      >
-        <div className="absolute inset-0 cad-ambient-grid opacity-30 pointer-events-none" />
-        <div className="relative px-5 py-5 sm:px-6 sm:py-6">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-2 h-2 rounded-full bg-amber-400" style={{ boxShadow: '0 0 8px rgba(251,191,36,0.7)' }} />
-            <span className="text-[10px] uppercase tracking-[0.2em] text-cad-muted">Setup Required</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-cad-ink">
-            {!hasDiscord ? 'Link Your Discord Account' : 'Awaiting Department Access'}
-          </h1>
-          <p className="text-sm text-cad-muted mt-1">
-            {!hasDiscord
-              ? 'Your Discord roles determine which department workspaces you can access.'
-              : 'Discord linked. Contact an administrator to assign department roles.'}
-          </p>
+    <div className="relative h-full overflow-hidden rounded-3xl border border-cad-border bg-cad-card/90 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+      <div className="absolute inset-0 cad-ambient-grid opacity-35" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_12%,rgba(88,101,242,0.22),transparent_36%),radial-gradient(circle_at_92%_10%,rgba(216,180,108,0.14),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0))]" />
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="w-[min(82vw,860px)] h-[min(76vh,700px)] opacity-[0.2]">
+          <img src="/1080.png" alt="" className="w-full h-full object-contain cad-home-watermark-image" />
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-md">
-          {/* Checklist */}
-          <div className="space-y-3 mb-6">
+      <div className="relative z-10 h-full p-4 sm:p-6 grid grid-cols-1 xl:grid-cols-[1.08fr_0.92fr] gap-4 items-stretch">
+        <section className="rounded-2xl border border-cad-border bg-cad-surface/55 p-5 sm:p-6 flex flex-col">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-2 h-2 rounded-full bg-amber-400" style={{ boxShadow: '0 0 10px rgba(251,191,36,0.75)' }} />
+            <span className="text-[11px] uppercase tracking-[0.18em] text-cad-muted">Setup Required</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-cad-ink">
+            {!hasDiscord ? 'Link Discord To Continue' : 'Awaiting Department Role Access'}
+          </h1>
+          <p className="text-sm sm:text-base text-cad-muted mt-2 leading-6 max-w-2xl">
+            {!hasDiscord
+              ? 'Your Discord roles determine which department workspaces appear in CAD. Link your Discord account to continue.'
+              : 'Your Discord account is linked. A CAD administrator now needs to map your Discord roles to department access.'}
+          </p>
+
+          <div className="mt-5 space-y-3">
             {[
-              { label: 'Link Discord account to CAD profile', done: hasDiscord },
-              { label: 'Verify Discord roles map to departments', done: false },
-              { label: 'Launch your assigned workspace', done: false },
+              { label: 'Link Discord account to your CAD profile', done: hasDiscord },
+              { label: 'Admin maps Discord roles to departments', done: false },
+              { label: 'Select and launch an assigned workspace', done: false },
             ].map((step, i) => (
               <div
-                key={i}
-                className={`flex items-center gap-4 rounded-xl border p-4 transition-colors ${step.done ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-cad-border bg-cad-surface/40'}`}
+                key={step.label}
+                className={`flex items-center gap-4 rounded-xl border p-3.5 ${step.done ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-cad-border bg-cad-card/65'}`}
               >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold ${step.done ? 'bg-emerald-500/20 text-emerald-400' : 'bg-cad-card border border-cad-border text-cad-muted'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold ${step.done ? 'bg-emerald-500/20 text-emerald-300' : 'bg-cad-surface border border-cad-border text-cad-muted'}`}>
                   {step.done ? (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                     </svg>
-                  ) : i + 1}
+                  ) : (i + 1)}
                 </div>
-                <p className={`text-sm ${step.done ? 'text-emerald-300' : 'text-cad-muted'}`}>{step.label}</p>
+                <p className={`text-sm leading-5 ${step.done ? 'text-emerald-200' : 'text-cad-muted'}`}>{step.label}</p>
               </div>
             ))}
           </div>
 
-          {!hasDiscord && (
-            <button
-              onClick={linkDiscord}
-              disabled={linking}
-              className="w-full flex items-center justify-center gap-3 rounded-xl bg-[#5865F2] hover:bg-[#4752C4] text-white px-4 py-3 text-sm font-semibold transition-colors disabled:opacity-50"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.04.035.052a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
-              </svg>
-              {linking ? 'Redirecting to Discord...' : 'Link Discord Account'}
-            </button>
-          )}
-
-          {hasDiscord && (
-            <div className="rounded-xl border border-cad-border bg-cad-surface/40 p-4 text-center">
-              <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-2">
-                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          <div className="mt-auto pt-5">
+            {!hasDiscord ? (
+              <button
+                onClick={linkDiscord}
+                disabled={linking}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-3 rounded-xl bg-[#5865F2] hover:bg-[#4752C4] text-white px-4 py-3 text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.04.035.052a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
                 </svg>
+                {linking ? 'Redirecting to Discord...' : 'Link Discord Account'}
+              </button>
+            ) : (
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3.5 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <p className="text-sm font-medium text-emerald-200">{user?.discord_name || 'Discord linked'}</p>
+                </div>
+                <p className="text-xs text-cad-muted mt-1">
+                  Waiting for department role assignment from an administrator.
+                </p>
               </div>
-              <p className="text-sm font-medium text-cad-ink">{user?.discord_name || 'Discord linked'}</p>
-              <p className="text-xs text-cad-muted mt-1">Waiting for department role assignment from an administrator.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-cad-border bg-cad-surface/55 p-5 sm:p-6 flex flex-col">
+          <p className="text-[11px] uppercase tracking-[0.16em] text-cad-muted mb-3">What Happens Next</p>
+          <div className="space-y-3">
+            <div className="rounded-xl border border-cad-border bg-cad-card/70 p-3.5">
+              <p className="text-sm font-medium text-cad-ink">Role-based department access</p>
+              <p className="text-xs text-cad-muted mt-1 leading-5">
+                CAD reads your Discord roles and shows only the workspaces your account is authorised to use.
+              </p>
             </div>
-          )}
-        </div>
+            <div className="rounded-xl border border-cad-border bg-cad-card/70 p-3.5">
+              <p className="text-sm font-medium text-cad-ink">Operational access checks</p>
+              <p className="text-xs text-cad-muted mt-1 leading-5">
+                Some modules require an active FiveM session once you enter a department workspace. Dispatch is exempt.
+              </p>
+            </div>
+            <div className="rounded-xl border border-cad-border bg-cad-card/70 p-3.5">
+              <p className="text-sm font-medium text-cad-ink">Admin action (if needed)</p>
+              <p className="text-xs text-cad-muted mt-1 leading-5">
+                If Discord is linked but no departments appear, ask an admin to map your Discord roles to CAD departments.
+              </p>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -433,24 +452,34 @@ function SetupBanner({ user }) {
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 mb-4 flex items-center justify-between gap-3">
-      <div className="flex items-center gap-3">
-        <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-        <p className="text-sm text-amber-200">
-          {!hasDiscord ? 'Link your Discord account to access department workspaces.' : 'Discord linked — no departments are role-mapped yet.'}
-        </p>
+    <div className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-amber-500/6 px-4 py-3.5 mb-4">
+      <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 via-transparent to-transparent" />
+      <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-lg border border-amber-500/20 bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-amber-300/90">Setup Attention Required</p>
+            <p className="text-sm text-amber-100 mt-0.5">
+              {!hasDiscord
+                ? 'Link your Discord account to access department workspaces.'
+                : 'Discord linked - no departments are role-mapped yet.'}
+            </p>
+          </div>
+        </div>
+        {!hasDiscord && (
+          <button
+            onClick={linkDiscord}
+            disabled={linking}
+            className="flex-shrink-0 px-3.5 py-2 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+          >
+            {linking ? 'Redirecting...' : 'Link Discord'}
+          </button>
+        )}
       </div>
-      {!hasDiscord && (
-        <button
-          onClick={linkDiscord}
-          disabled={linking}
-          className="flex-shrink-0 px-3 py-1.5 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-        >
-          {linking ? 'Redirecting...' : 'Link Discord'}
-        </button>
-      )}
     </div>
   );
 }
