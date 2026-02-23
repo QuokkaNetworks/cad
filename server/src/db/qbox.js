@@ -987,6 +987,7 @@ async function getPlayerCharacterJobsByCitizenId(citizenId) {
     const configuredJobGradeCol = String(jobGradeCol || '').trim();
 
     let rows = [];
+    const exactRowsByKey = new Map();
     const accountLicense = await getLicenseByCitizenId(normalizedCitizenId).catch(() => null);
     const matchCandidates = [];
     if (accountLicense) matchCandidates.push(String(accountLicense).trim());
@@ -1001,9 +1002,34 @@ async function getPlayerCharacterJobsByCitizenId(citizenId) {
         [candidate]
       );
       if (Array.isArray(candidateRows) && candidateRows.length > 0) {
-        rows = candidateRows;
-        break;
+        for (const row of candidateRows) {
+          const key = JSON.stringify(row);
+          if (exactRowsByKey.has(key)) continue;
+          exactRowsByKey.set(key, row);
+        }
       }
+    }
+    rows = Array.from(exactRowsByKey.values());
+
+    // Some job tables store identifiers with inconsistent case/whitespace. If no exact
+    // match rows were found, retry with a normalized string compare.
+    if ((!Array.isArray(rows) || rows.length === 0) && matchCandidates.length > 0) {
+      const normalizedRowsByKey = new Map();
+      for (const candidate of matchCandidates) {
+        if (!candidate) continue;
+        const [candidateRows] = await p.query(
+          `SELECT * FROM ${tableNameSql}
+           WHERE LOWER(TRIM(CAST(${jobMatchColSql} AS CHAR))) = LOWER(TRIM(?))`,
+          [candidate]
+        );
+        if (!Array.isArray(candidateRows) || candidateRows.length === 0) continue;
+        for (const row of candidateRows) {
+          const key = JSON.stringify(row);
+          if (normalizedRowsByKey.has(key)) continue;
+          normalizedRowsByKey.set(key, row);
+        }
+      }
+      rows = Array.from(normalizedRowsByKey.values());
     }
 
     if (!Array.isArray(rows) || rows.length === 0) {
