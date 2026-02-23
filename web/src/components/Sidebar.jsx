@@ -18,7 +18,6 @@ const LAW_NAV = [
 
 const EMS_NAV = [
   { to: '/department', label: 'Home', icon: 'M3 12l9-9 9 9M4 10v10h5v-6h6v6h5V10' },
-  { to: '/search', label: 'Patient Analysis', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
   { to: '/ems-treatment', label: 'Treatment Log', icon: 'M12 6v12m6-6H6' },
   { to: '/ems-transport', label: 'Transport Tracker', icon: 'M3 13h2l2-5 4 10 2-5h6' },
   { to: '/records', label: 'Patient Reports', icon: 'M9 12h6m-6 4h6M8 2h8a2 2 0 012 2v16l-6-3-6 3V4a2 2 0 012-2z' },

@@ -70,6 +70,9 @@ const Users = {
   findByDiscordId(discordId) {
     return db.prepare('SELECT * FROM users WHERE discord_id = ?').get(discordId);
   },
+  findByPreferredCitizenId(citizenId) {
+    return db.prepare('SELECT * FROM users WHERE lower(preferred_citizen_id) = lower(?)').get(String(citizenId || '').trim());
+  },
   create({ steam_id, steam_name, avatar_url }) {
     const info = db.prepare(
       'INSERT INTO users (steam_id, steam_name, avatar_url) VALUES (?, ?, ?)'
@@ -2707,6 +2710,43 @@ const AuditLog = {
     db.prepare(
       'INSERT INTO audit_log (user_id, action, details) VALUES (?, ?, ?)'
     ).run(user_id || null, action, typeof details === 'object' ? JSON.stringify(details) : (details || ''));
+  },
+  countByUserActionsSince(userId, { since = null, actions = [] } = {}) {
+    const parsedUserId = Number(userId);
+    if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) return {};
+    const normalizedActions = Array.isArray(actions)
+      ? Array.from(new Set(
+        actions
+          .map((action) => String(action || '').trim())
+          .filter(Boolean)
+      ))
+      : [];
+    if (normalizedActions.length === 0) return {};
+
+    const params = [parsedUserId];
+    let sinceFilter = '';
+    const normalizedSince = String(since || '').trim();
+    if (normalizedSince) {
+      sinceFilter = 'AND created_at >= ?';
+      params.push(normalizedSince);
+    }
+
+    const placeholders = normalizedActions.map(() => '?').join(', ');
+    params.push(...normalizedActions);
+    const rows = db.prepare(`
+      SELECT action, COUNT(*) AS count
+      FROM audit_log
+      WHERE user_id = ? ${sinceFilter}
+        AND action IN (${placeholders})
+      GROUP BY action
+    `).all(...params);
+
+    return rows.reduce((acc, row) => {
+      const key = String(row?.action || '').trim();
+      if (!key) return acc;
+      acc[key] = Number(row?.count || 0);
+      return acc;
+    }, {});
   },
   list(limit = 100, offset = 0) {
     return db.prepare(`

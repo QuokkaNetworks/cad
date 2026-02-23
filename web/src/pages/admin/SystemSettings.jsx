@@ -27,6 +27,8 @@ export default function AdminSystemSettings() {
   const [purgingLicenses, setPurgingLicenses] = useState(false);
   const [purgingRegistrations, setPurgingRegistrations] = useState(false);
   const [purgeResult, setPurgeResult] = useState(null);
+  const [testingWarrantWebhook, setTestingWarrantWebhook] = useState(false);
+  const [warrantWebhookTestResult, setWarrantWebhookTestResult] = useState(null);
 
   async function fetchSettings() {
     try {
@@ -68,6 +70,27 @@ export default function AdminSystemSettings() {
       alert('Failed to save:\n' + formatErr(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveAndTestWarrantWebhook() {
+    setTestingWarrantWebhook(true);
+    setWarrantWebhookTestResult(null);
+    try {
+      await api.put('/api/admin/settings', { settings });
+      const result = await api.post('/api/admin/warrant-community-webhook/test', {});
+      setWarrantWebhookTestResult({
+        success: true,
+        message: `Test webhook sent successfully${result?.location ? ` (location: ${result.location})` : ''}.`,
+      });
+      fetchSettings();
+    } catch (err) {
+      setWarrantWebhookTestResult({
+        success: false,
+        message: formatErr(err),
+      });
+    } finally {
+      setTestingWarrantWebhook(false);
     }
   }
 
@@ -297,6 +320,88 @@ export default function AdminSystemSettings() {
               </>
             )}
           </div>
+        )}
+      </div>
+
+      <div className="bg-cad-card border border-cad-border rounded-xl p-6">
+        <h3 className="text-sm font-semibold text-cad-muted uppercase tracking-wider mb-5">Warrant Community Alerts</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <label className="block text-xs text-cad-muted mb-1">Discord Webhook URL</label>
+            <input
+              type="text"
+              value={settings.discord_warrant_community_webhook_url || ''}
+              onChange={e => updateSetting('discord_warrant_community_webhook_url', e.target.value)}
+              className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-cad-accent"
+              placeholder="https://discord.com/api/webhooks/..."
+            />
+            <p className="text-xs text-cad-muted mt-1">
+              Used for community wanted poster notifications when a warrant is created. Stored in CAD settings (not .env).
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs text-cad-muted mb-1">Default Location Label</label>
+            <input
+              type="text"
+              value={settings.discord_warrant_community_default_location || 'Los Santos'}
+              onChange={e => updateSetting('discord_warrant_community_default_location', e.target.value)}
+              className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm focus:outline-none focus:border-cad-accent"
+              placeholder="Los Santos"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-cad-muted mb-1">Webhook Username (optional)</label>
+            <input
+              type="text"
+              value={settings.discord_warrant_community_webhook_username || ''}
+              onChange={e => updateSetting('discord_warrant_community_webhook_username', e.target.value)}
+              className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm focus:outline-none focus:border-cad-accent"
+              placeholder="Community Wanted Alerts"
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs text-cad-muted mb-1">Webhook Avatar URL (optional)</label>
+            <input
+              type="text"
+              value={settings.discord_warrant_community_webhook_avatar_url || ''}
+              onChange={e => updateSetting('discord_warrant_community_webhook_avatar_url', e.target.value)}
+              className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm focus:outline-none focus:border-cad-accent"
+              placeholder="https://..."
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs text-cad-muted mb-1">Poster Template Path (optional)</label>
+            <input
+              type="text"
+              value={settings.discord_warrant_community_poster_template_path || ''}
+              onChange={e => updateSetting('discord_warrant_community_poster_template_path', e.target.value)}
+              className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-cad-accent"
+              placeholder="C:\\path\\to\\wanted-template.png"
+            />
+            <p className="text-xs text-cad-muted mt-1">
+              Optional local image path to use as the poster template background.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 mt-4">
+          <button
+            type="button"
+            onClick={saveAndTestWarrantWebhook}
+            disabled={testingWarrantWebhook || saving}
+            className="px-3 py-1.5 text-sm bg-[#5865F2] hover:bg-[#4752C4] text-white rounded border border-[#5865F2]/40 transition-colors disabled:opacity-50"
+          >
+            {testingWarrantWebhook ? 'Sending Test...' : 'Save + Send Test Wanted Poster'}
+          </button>
+          <p className="text-xs text-cad-muted">
+            Sends a sample wanted poster to the currently entered webhook URL after saving settings.
+          </p>
+        </div>
+
+        {warrantWebhookTestResult && (
+          <p className={`text-xs mt-3 whitespace-pre-wrap ${warrantWebhookTestResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
+            {warrantWebhookTestResult.message}
+          </p>
         )}
       </div>
 

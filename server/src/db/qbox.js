@@ -5,6 +5,7 @@ const { Settings } = require('./sqlite');
 let pool = null;
 let poolConfigSignature = '';
 const IDENTIFIER_RE = /^[A-Za-z0-9_]+$/;
+let playerGroupsLookupWarningShown = false;
 
 function getSetting(key, fallback) {
   const value = Settings.get(key);
@@ -542,6 +543,17 @@ function normalizeJobGrade(value) {
   return Math.max(0, Math.trunc(parsed));
 }
 
+function isPlayerGroupsSchemaLookupError(err) {
+  const code = String(err?.code || '').trim().toUpperCase();
+  if (code === 'ER_NO_SUCH_TABLE' || code === 'ER_BAD_FIELD_ERROR') return true;
+  const message = String(err?.message || '').toLowerCase();
+  return (
+    message.includes('doesn\'t exist')
+    || message.includes('unknown column')
+    || message.includes('table')
+  ) && message.includes('player_groups');
+}
+
 function parseJobContainer(value) {
   if (value === null || value === undefined) return null;
   if (typeof value === 'object') return value;
@@ -618,6 +630,10 @@ function getQboxTableConfig() {
   return {
     playersTable: getSetting('qbox_players_table', 'players'),
     vehiclesTable: getSetting('qbox_vehicles_table', 'player_vehicles'),
+    playerGroupsTable: getSetting('qbox_player_groups_table', 'player_groups'),
+    playerGroupsCitizenIdCol: getSetting('qbox_player_groups_citizenid_col', 'citizenid'),
+    playerGroupsGroupCol: getSetting('qbox_player_groups_group_col', 'group'),
+    playerGroupsGradeCol: getSetting('qbox_player_groups_grade_col', 'grade'),
     propertiesTable: getSetting('qbox_properties_table', 'properties'),
     propertiesOwnerCol: getSetting('qbox_properties_owner_col', 'owner'),
     propertiesNameCol: getSetting('qbox_properties_name_col', 'property_name'),
@@ -917,6 +933,133 @@ async function getCharacterJobById(citizenId) {
   };
 }
 
+async function getPlayerCharacterJobsByCitizenId(citizenId) {
+  const normalizedCitizenId = String(citizenId || '').trim();
+  if (!normalizedCitizenId) return [];
+
+  try {
+    const p = await getPool();
+    const {
+      playersTable,
+      citizenIdCol,
+      charInfoCol,
+      jobCol,
+    } = getQboxTableConfig();
+    const tableNameSql = escapeIdentifier(playersTable, 'players table');
+    const citizenIdColSql = escapeIdentifier(citizenIdCol, 'citizen ID column');
+    const licenseColSql = escapeIdentifier('license', 'license column');
+
+    let rows = [];
+    const accountLicense = await getLicenseByCitizenId(normalizedCitizenId).catch(() => null);
+    if (accountLicense) {
+      [rows] = await p.query(
+        `SELECT * FROM ${tableNameSql} WHERE ${licenseColSql} = ?`,
+        [accountLicense]
+      );
+    }
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      [rows] = await p.query(
+        `SELECT * FROM ${tableNameSql} WHERE ${citizenIdColSql} = ? LIMIT 1`,
+        [normalizedCitizenId]
+      );
+    }
+
+    const seen = new Set();
+    const jobs = [];
+    for (const row of rows || []) {
+      const rowCitizenId = String(row?.[citizenIdCol] || '').trim() || normalizedCitizenId;
+      const charInfo = parseMaybeJson(
+        row && Object.prototype.hasOwnProperty.call(row, charInfoCol)
+          ? row[charInfoCol]
+          : row?.charinfo
+      );
+      const extractedJob = extractJobFromCharacterRow(row, charInfo, jobCol);
+      if (!extractedJob || !String(extractedJob.name || '').trim()) continue;
+
+      const name = normalizeJobName(extractedJob.name);
+      const grade = normalizeJobGrade(extractedJob.grade);
+      const dedupeKey = `${rowCitizenId.toLowerCase()}::${name.toLowerCase()}::${grade}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+
+      jobs.push({
+        citizenid: rowCitizenId,
+        name,
+        grade,
+      });
+    }
+
+    jobs.sort((a, b) => {
+      const aPreferred = String(a.citizenid || '').trim().toLowerCase() === normalizedCitizenId.toLowerCase() ? 1 : 0;
+      const bPreferred = String(b.citizenid || '').trim().toLowerCase() === normalizedCitizenId.toLowerCase() ? 1 : 0;
+      if (bPreferred !== aPreferred) return bPreferred - aPreferred;
+      if (b.grade !== a.grade) return b.grade - a.grade;
+      const nameCmp = String(a.name || '').localeCompare(String(b.name || ''));
+      if (nameCmp !== 0) return nameCmp;
+      return String(a.citizenid || '').localeCompare(String(b.citizenid || ''));
+    });
+
+    return jobs;
+  } catch (err) {
+    console.error('QBox get player character jobs error:', err);
+    throw new Error(`QBox player character jobs lookup error: ${err.message}`);
+  }
+}
+
+async function getCharacterJobGroupsById(citizenId) {
+  const normalizedCitizenId = String(citizenId || '').trim();
+  if (!normalizedCitizenId) return [];
+
+  try {
+    const p = await getPool();
+    const {
+      playerGroupsTable,
+      playerGroupsCitizenIdCol,
+      playerGroupsGroupCol,
+      playerGroupsGradeCol,
+    } = getQboxTableConfig();
+    const tableSql = escapeIdentifier(playerGroupsTable, 'player groups table');
+    const citizenIdColSql = escapeIdentifier(playerGroupsCitizenIdCol, 'player groups citizen ID column');
+    const groupColSql = escapeIdentifier(playerGroupsGroupCol, 'player groups group column');
+    const gradeColSql = escapeIdentifier(playerGroupsGradeCol, 'player groups grade column');
+
+    const [rows] = await p.query(
+      `SELECT ${groupColSql} AS job_name, ${gradeColSql} AS job_grade
+       FROM ${tableSql}
+       WHERE ${citizenIdColSql} = ?`,
+      [normalizedCitizenId]
+    );
+
+    const seen = new Set();
+    const groups = [];
+    for (const row of rows || []) {
+      const name = normalizeJobName(row?.job_name);
+      if (!name) continue;
+      const grade = normalizeJobGrade(row?.job_grade);
+      const key = `${name.toLowerCase()}::${grade}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      groups.push({ citizenid: normalizedCitizenId, name, grade });
+    }
+
+    groups.sort((a, b) => {
+      if (b.grade !== a.grade) return b.grade - a.grade;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+    return groups;
+  } catch (err) {
+    if (isPlayerGroupsSchemaLookupError(err)) {
+      if (!playerGroupsLookupWarningShown) {
+        playerGroupsLookupWarningShown = true;
+        console.warn('[QBox] player_groups lookup unavailable for reverse job sync; falling back to character job fields:', err.message);
+      }
+      return [];
+    }
+    throw err;
+  }
+}
+
 async function searchVehicles(term) {
   try {
     const p = await getPool();
@@ -1125,6 +1268,8 @@ module.exports = {
   searchCharacters,
   getCharacterById,
   getCharacterJobById,
+  getPlayerCharacterJobsByCitizenId,
+  getCharacterJobGroupsById,
   searchVehicles,
   getVehicleByPlate,
   getVehiclesByOwner,

@@ -3,6 +3,17 @@ import { api } from '../api/client';
 import { useEventSource } from '../hooks/useEventSource';
 import { formatDateTimeAU } from '../utils/dateTime';
 
+const CHAIN_STATUS_OPTIONS = [
+  { value: 'logged', label: 'Logged' },
+  { value: 'collected', label: 'Collected' },
+  { value: 'seized', label: 'Seized' },
+  { value: 'submitted', label: 'Submitted' },
+  { value: 'in_locker', label: 'In Locker' },
+  { value: 'lab', label: 'At Lab' },
+  { value: 'released', label: 'Released' },
+  { value: 'other', label: 'Other' },
+];
+
 function buildEmptyForm() {
   return {
     case_number: '',
@@ -11,6 +22,32 @@ function buildEmptyForm() {
     photo_url: '',
     chain_status: 'logged',
   };
+}
+
+function formatStatusLabel(value) {
+  return String(value || '')
+    .trim()
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ') || 'Unknown';
+}
+
+function getStatusBadgeClasses(status) {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'seized' || normalized === 'collected') {
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+  }
+  if (normalized === 'submitted' || normalized === 'lab') {
+    return 'border-sky-500/30 bg-sky-500/10 text-sky-300';
+  }
+  if (normalized === 'released') {
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+  }
+  if (normalized === 'in_locker') {
+    return 'border-violet-500/30 bg-violet-500/10 text-violet-300';
+  }
+  return 'border-cad-border bg-cad-surface text-cad-muted';
 }
 
 export default function EvidencePanel({
@@ -29,6 +66,7 @@ export default function EvidencePanel({
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(buildEmptyForm);
   const [open, setOpen] = useState(false);
+  const [showComposer, setShowComposer] = useState(!compact);
 
   async function loadEvidence() {
     if (!canLoad) {
@@ -92,6 +130,7 @@ export default function EvidencePanel({
       setItems((current) => [created, ...(Array.isArray(current) ? current : [])]);
       setForm(buildEmptyForm());
       if (!open) setOpen(true);
+      if (compact) setShowComposer(false);
     } catch (err) {
       alert('Failed to add evidence: ' + (err?.message || 'Unknown error'));
     } finally {
@@ -111,6 +150,7 @@ export default function EvidencePanel({
   }
 
   const itemCount = useMemo(() => (Array.isArray(items) ? items.length : 0), [items]);
+  const canShowList = !compact || open;
 
   return (
     <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
@@ -118,68 +158,114 @@ export default function EvidencePanel({
         <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">
           {title} ({itemCount})
         </h4>
-        {compact && (
-          <button
-            type="button"
-            onClick={() => setOpen((prev) => !prev)}
-            className="px-2 py-1 text-[11px] rounded border border-cad-border text-cad-muted hover:text-cad-ink"
-          >
-            {open ? 'Hide' : 'Show'}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canLoad && (
+            <button
+              type="button"
+              onClick={() => setShowComposer((prev) => !prev)}
+              className="px-2 py-1 text-[11px] rounded border border-cad-border text-cad-muted hover:text-cad-ink"
+            >
+              {showComposer ? 'Hide Form' : '+ Add Evidence'}
+            </button>
+          )}
+          {compact && (
+            <button
+              type="button"
+              onClick={() => setOpen((prev) => !prev)}
+              className="px-2 py-1 text-[11px] rounded border border-cad-border text-cad-muted hover:text-cad-ink"
+            >
+              {open ? 'Hide List' : 'Show List'}
+            </button>
+          )}
+        </div>
       </div>
 
-      {(!compact || open) && (
+      {canShowList && (
         <>
-          <form onSubmit={createEvidence} className="space-y-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <input
-                type="text"
-                value={form.case_number}
-                onChange={(e) => setForm((current) => ({ ...current, case_number: e.target.value }))}
-                placeholder="Case number"
-                className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-              />
-              <input
-                type="text"
-                value={form.chain_status}
-                onChange={(e) => setForm((current) => ({ ...current, chain_status: e.target.value }))}
-                placeholder="Chain status (logged/seized/etc)"
-                className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-              />
-            </div>
-            <input
-              type="text"
-              required
-              value={form.title}
-              onChange={(e) => setForm((current) => ({ ...current, title: e.target.value }))}
-              placeholder="Evidence title"
-              className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-            />
-            <input
-              type="url"
-              value={form.photo_url}
-              onChange={(e) => setForm((current) => ({ ...current, photo_url: e.target.value }))}
-              placeholder="Photo URL (optional)"
-              className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-            />
-            <textarea
-              value={form.description}
-              onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
-              rows={compact ? 2 : 3}
-              placeholder="Description / chain notes"
-              className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm resize-none"
-            />
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={saving || !canLoad}
-                className="px-3 py-2 bg-cad-accent hover:bg-cad-accent-light text-white rounded text-sm font-medium disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Add Evidence'}
-              </button>
-            </div>
-          </form>
+          {showComposer && (
+            <form onSubmit={createEvidence} className="space-y-2 bg-cad-card border border-cad-border rounded-lg p-3">
+              <div className="flex items-center justify-between gap-2">
+                <h5 className="text-xs font-semibold text-cad-muted uppercase tracking-wider">New Evidence Item</h5>
+                <span className="text-[11px] text-cad-muted">
+                  {String(normalizedEntityType || '').replace('_', ' ')} #{numericEntityId}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] text-cad-muted mb-1">Case Number</label>
+                  <input
+                    type="text"
+                    value={form.case_number}
+                    onChange={(e) => setForm((current) => ({ ...current, case_number: e.target.value }))}
+                    placeholder="Case number (optional)"
+                    className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-cad-muted mb-1">Chain Status</label>
+                  <select
+                    value={form.chain_status}
+                    onChange={(e) => setForm((current) => ({ ...current, chain_status: e.target.value }))}
+                    className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm"
+                  >
+                    {CHAIN_STATUS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] text-cad-muted mb-1">Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={form.title}
+                  onChange={(e) => setForm((current) => ({ ...current, title: e.target.value }))}
+                  placeholder="e.g. Bodycam clip, Weapon photo, CCTV still"
+                  className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-cad-muted mb-1">Photo / File URL</label>
+                <input
+                  type="url"
+                  value={form.photo_url}
+                  onChange={(e) => setForm((current) => ({ ...current, photo_url: e.target.value }))}
+                  placeholder="https://... (optional)"
+                  className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-cad-muted mb-1">Notes</label>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
+                  rows={compact ? 2 : 3}
+                  placeholder="Description / chain notes"
+                  className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm resize-none"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm(buildEmptyForm());
+                    setShowComposer(false);
+                  }}
+                  className="px-3 py-2 border border-cad-border rounded text-sm text-cad-muted hover:text-cad-ink"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving || !canLoad}
+                  className="px-3 py-2 bg-cad-accent hover:bg-cad-accent-light text-white rounded text-sm font-medium disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Add Evidence'}
+                </button>
+              </div>
+            </form>
+          )}
 
           <div className="space-y-2">
             {loading ? (
@@ -188,13 +274,26 @@ export default function EvidencePanel({
               <p className="text-xs text-cad-muted">No evidence items attached yet.</p>
             ) : (
               items.map((item) => (
-                <div key={item.id} className="bg-cad-card border border-cad-border rounded p-2">
+                <div key={item.id} className="bg-cad-card border border-cad-border rounded p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium break-words">{item.title}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium break-words">{item.title}</p>
+                        {item.chain_status ? (
+                          <span className={`px-2 py-0.5 rounded border text-[11px] ${getStatusBadgeClasses(item.chain_status)}`}>
+                            {formatStatusLabel(item.chain_status)}
+                          </span>
+                        ) : null}
+                        {item.photo_url ? (
+                          <span className="px-2 py-0.5 rounded border border-cad-border text-[11px] text-cad-muted">
+                            Photo
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="flex flex-wrap gap-2 mt-1 text-[11px] text-cad-muted">
+                        <span>#{item.id}</span>
                         {item.case_number ? <span>Case: <span className="text-cad-ink">{item.case_number}</span></span> : null}
-                        {item.chain_status ? <span>Status: <span className="text-cad-ink">{item.chain_status}</span></span> : null}
+                        {item.creator_name ? <span>By: <span className="text-cad-ink">{item.creator_name}</span></span> : null}
                         <span>{formatDateTimeAU(item.created_at ? `${item.created_at}Z` : '', '-')}</span>
                       </div>
                     </div>
@@ -216,7 +315,7 @@ export default function EvidencePanel({
                       rel="noreferrer"
                       className="inline-block mt-2 text-xs text-cad-accent-light hover:underline break-all"
                     >
-                      {item.photo_url}
+                      Open file / photo
                     </a>
                   ) : null}
                 </div>

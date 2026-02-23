@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import GoOnDutyModal from '../../components/GoOnDutyModal';
+import OffDutySummaryModal from '../../components/OffDutySummaryModal';
 import { useDepartment } from '../../context/DepartmentContext';
 import { useEventSource } from '../../hooks/useEventSource';
 import { DEPARTMENT_LAYOUT, getDepartmentLayoutType } from '../../utils/departmentLayout';
@@ -51,6 +52,7 @@ export default function DepartmentHome() {
   const [now, setNow] = useState(() => new Date());
   const [myUnit, setMyUnit] = useState(null);
   const [showOnDutyModal, setShowOnDutyModal] = useState(false);
+  const [offDutySummary, setOffDutySummary] = useState(null);
   const [onDutyLoading, setOnDutyLoading] = useState(false);
   const [offDutyLoading, setOffDutyLoading] = useState(false);
   const refreshTimerRef = useRef(null);
@@ -60,6 +62,7 @@ export default function DepartmentHome() {
   const isDispatch = !!activeDepartment?.is_dispatch;
   const layoutType = getDepartmentLayoutType(activeDepartment);
   const isPoliceDepartment = layoutType === DEPARTMENT_LAYOUT.LAW_ENFORCEMENT;
+  const isFireDepartment = layoutType === DEPARTMENT_LAYOUT.FIRE;
   const slogan = String(activeDepartment?.slogan || '').trim() || getDefaultSlogan(activeDepartment, layoutType);
   const onActiveDeptDuty = !!(myUnit && activeDepartment && myUnit.department_id === activeDepartment.id);
   const onOtherDeptDuty = !!(myUnit && activeDepartment && myUnit.department_id !== activeDepartment.id);
@@ -186,8 +189,9 @@ export default function DepartmentHome() {
   async function goOffDuty() {
     setOffDutyLoading(true);
     try {
-      await api.delete('/api/units/me');
+      const response = await api.delete('/api/units/me');
       setMyUnit(null);
+      setOffDutySummary(response?.summary || null);
       scheduleRefresh();
     } catch (err) {
       alert('Failed to go off duty: ' + err.message);
@@ -223,11 +227,11 @@ export default function DepartmentHome() {
   const clockTimeLabel = useMemo(() => formatTimeAU(now, '-', true), [now]);
 
   const statCards = [
-    { label: 'Active Calls', value: stats.active_calls, tone: 'text-cad-accent-light' },
+    { label: isFireDepartment ? 'Active Incidents' : 'Active Calls', value: stats.active_calls, tone: 'text-cad-accent-light' },
     { label: 'Urgent / 000', value: stats.urgent_calls, tone: 'text-red-400' },
-    { label: 'Units On Duty', value: stats.on_duty_units, tone: 'text-emerald-400' },
-    { label: 'Units Available', value: stats.available_units, tone: 'text-sky-400' },
-    { label: 'Units Assigned', value: stats.assigned_units, tone: 'text-amber-300' },
+    { label: isFireDepartment ? 'Crews On Duty' : 'Units On Duty', value: stats.on_duty_units, tone: 'text-emerald-400' },
+    { label: isFireDepartment ? 'Crews Available' : 'Units Available', value: stats.available_units, tone: 'text-sky-400' },
+    { label: isFireDepartment ? 'Crews Assigned' : 'Units Assigned', value: stats.assigned_units, tone: 'text-amber-300' },
   ];
 
   return (
@@ -344,6 +348,64 @@ export default function DepartmentHome() {
         </section>
       )}
 
+      {isFireDepartment && (
+        <section className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-3">
+          <div className="bg-cad-card border border-cad-border rounded-xl p-4">
+            <p className="text-xs text-cad-muted uppercase tracking-wider">Fire Workflow</p>
+            <h3 className="text-lg font-semibold mt-2">Respond, report, then pre-plan.</h3>
+            <p className="text-sm text-cad-muted mt-2">
+              Use the Response Board for live incidents, Incident Reports for post-incident documentation, and Lookup for people/vehicle context tied to incidents.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => navigate('/units')}
+                className="px-3 py-1.5 rounded bg-cad-accent hover:bg-cad-accent-light text-white text-sm font-medium transition-colors"
+              >
+                Open Response Board
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/records')}
+                className="px-3 py-1.5 rounded bg-cad-surface border border-cad-border hover:border-cad-accent/50 text-cad-ink text-sm transition-colors"
+              >
+                Incident Reports
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/search')}
+                className="px-3 py-1.5 rounded bg-cad-surface border border-cad-border hover:border-cad-accent/50 text-cad-ink text-sm transition-colors"
+              >
+                Lookup
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-cad-card border border-cad-border rounded-xl p-4">
+            <p className="text-xs text-cad-muted uppercase tracking-wider">Planning Tabs</p>
+            <p className="text-sm text-cad-muted mt-2">
+              Apparatus and Pre-Plans are available as dedicated fire tabs and currently act as guided workflow hubs while the full backend modules are being built.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => navigate('/fire-apparatus')}
+                className="px-3 py-1.5 rounded border border-cad-border text-sm hover:bg-cad-surface"
+              >
+                Apparatus
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/fire-preplans')}
+                className="px-3 py-1.5 rounded border border-cad-border text-sm hover:bg-cad-surface"
+              >
+                Pre-Plans
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
       {error && (
         <p className="text-xs text-red-400 whitespace-pre-wrap">{error}</p>
       )}
@@ -356,6 +418,12 @@ export default function DepartmentHome() {
           await refreshMyUnit();
           scheduleRefresh();
         }}
+      />
+
+      <OffDutySummaryModal
+        open={!!offDutySummary}
+        summary={offDutySummary}
+        onClose={() => setOffDutySummary(null)}
       />
     </div>
   );

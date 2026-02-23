@@ -256,6 +256,59 @@ function resolveCadUserFromIdentifiers(identifiers = {}) {
   return null;
 }
 
+function resolveCadUserFromFiveMPlayerLink(link) {
+  if (!link) return null;
+  const linkKey = String(link.steam_id || '').trim();
+  const parsed = parseFiveMLinkKey(linkKey);
+
+  if (parsed.type === 'steam' && parsed.value) {
+    const bySteam = Users.findBySteamId(parsed.value);
+    if (bySteam) return bySteam;
+  }
+  if (parsed.type === 'discord' && parsed.value) {
+    const byDiscord = Users.findByDiscordId(parsed.value);
+    if (byDiscord) return byDiscord;
+  }
+
+  if (linkKey) {
+    const cachedUserId = Number(liveLinkUserCache.get(linkKey) || 0);
+    if (cachedUserId > 0) {
+      const cached = Users.findById(cachedUserId);
+      if (cached) return cached;
+    }
+  }
+
+  const linkedCitizenId = String(link.citizen_id || '').trim();
+  if (linkedCitizenId) {
+    const byPreferredCitizen = Users.findByPreferredCitizenId(linkedCitizenId);
+    if (byPreferredCitizen) return byPreferredCitizen;
+  }
+
+  return null;
+}
+
+function resolveCadUserFromBridgeIdentity({ ids = {}, citizenId = '' } = {}) {
+  let cadUser = resolveCadUserFromIdentifiers(ids);
+  if (!cadUser && ids?.linkKey) {
+    const cachedUserId = Number(liveLinkUserCache.get(ids.linkKey) || 0);
+    if (cachedUserId > 0) {
+      cadUser = Users.findById(cachedUserId) || null;
+    }
+  }
+  if (!cadUser && citizenId) {
+    const byActiveCitizenLink = findActiveLinkByCitizenId(citizenId);
+    cadUser = resolveCadUserFromFiveMPlayerLink(byActiveCitizenLink);
+  }
+  if (!cadUser && citizenId) {
+    const byCitizenLink = FiveMPlayerLinks.findByCitizenId(citizenId);
+    cadUser = resolveCadUserFromFiveMPlayerLink(byCitizenLink);
+  }
+  if (!cadUser && citizenId) {
+    cadUser = Users.findByPreferredCitizenId(citizenId) || null;
+  }
+  return cadUser || null;
+}
+
 function parseCadUserId(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) return 0;
@@ -2275,6 +2328,85 @@ router.post('/offline', requireBridgeAuth, (req, res) => {
     autoOffDuty = offDutyIfNotDispatch(Units.findByUserId(cadUser.id), 'offline_event');
   }
   res.json({ ok: true, auto_off_duty: autoOffDuty });
+});
+
+// Trigger Discord reverse job-role sync for a specific in-game player after a job/group change.
+router.post('/discord/job-role-sync', requireBridgeAuth, async (req, res) => {
+  const payload = req.body || {};
+  const ids = resolveLinkIdentifiers(payload.identifiers || []);
+  const citizenId = String(payload.citizenid || payload.citizen_id || '').trim();
+  const trigger = String(payload.trigger || payload.reason || 'job_update').trim() || 'job_update';
+  const sourceId = String(payload.source ?? payload.source_id ?? '').trim();
+  const jobName = String(payload.job_name || payload.group || '').trim();
+  const parsedGrade = Number(payload.job_grade ?? payload.grade ?? 0);
+  const jobGrade = Number.isFinite(parsedGrade) ? Math.max(0, Math.trunc(parsedGrade)) : 0;
+
+  let cadUser = resolveCadUserFromBridgeIdentity({ ids, citizenId });
+  if (cadUser) {
+    if (ids.steamId) liveLinkUserCache.set(ids.steamId, cadUser.id);
+    if (ids.discordId) liveLinkUserCache.set(`discord:${ids.discordId}`, cadUser.id);
+    if (ids.licenseId) liveLinkUserCache.set(`license:${ids.licenseId}`, cadUser.id);
+    if (ids.linkKey) liveLinkUserCache.set(ids.linkKey, cadUser.id);
+  }
+
+  if (!cadUser) {
+    audit(null, 'fivem_discord_job_role_sync_skipped', {
+      reason: 'cad_user_not_linked',
+      citizenId,
+      trigger,
+      sourceId,
+      job_name: jobName,
+      job_grade: jobGrade,
+      hasSteam: !!ids.steamId,
+      hasDiscord: !!ids.discordId,
+      hasLicense: !!ids.licenseId,
+    });
+    return res.json({ ok: true, synced: false, reason: 'cad_user_not_linked' });
+  }
+
+  const discordId = String(cadUser.discord_id || '').trim();
+  if (!discordId) {
+    audit(cadUser.id, 'fivem_discord_job_role_sync_skipped', {
+      reason: 'cad_user_missing_discord_link',
+      citizenId: citizenId || String(cadUser.preferred_citizen_id || '').trim(),
+      trigger,
+      sourceId,
+      job_name: jobName,
+      job_grade: jobGrade,
+    });
+    return res.json({ ok: true, synced: false, reason: 'cad_user_missing_discord_link', user_id: cadUser.id });
+  }
+
+  try {
+    const { syncUserRoles } = require('../discord/bot');
+    const syncResult = await syncUserRoles(discordId);
+
+    audit(cadUser.id, 'fivem_discord_job_role_sync_triggered', {
+      discordId,
+      citizenId: citizenId || String(cadUser.preferred_citizen_id || '').trim(),
+      trigger,
+      sourceId,
+      job_name: jobName,
+      job_grade: jobGrade,
+      sync_result: {
+        synced: !!syncResult?.synced,
+        reason: String(syncResult?.reason || ''),
+        reverse_job_role_sync: syncResult?.reverse_job_role_sync || null,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      synced: !!syncResult?.synced,
+      user_id: cadUser.id,
+      discord_id: discordId,
+      citizen_id: citizenId || String(cadUser.preferred_citizen_id || '').trim(),
+      result: syncResult,
+    });
+  } catch (err) {
+    console.error('[FiveMBridge] Discord job role sync trigger failed:', err?.message || err);
+    return res.status(500).json({ error: 'Discord job role sync failed', message: err.message });
+  }
 });
 
 // List dispatch-visible non-dispatch departments for in-game /000 UI department selection.

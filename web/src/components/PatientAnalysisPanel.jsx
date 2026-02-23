@@ -230,8 +230,15 @@ function BodyDiagram({
 export default function PatientAnalysisPanel({ person, activeDepartmentId, mode = 'full' }) {
   const citizenId = String(person?.citizenid || '').trim();
   const normalizedMode = String(mode || 'full').trim().toLowerCase();
-  const showTreatmentLogSection = normalizedMode !== 'transport';
-  const showTransportTrackerSection = normalizedMode !== 'treatment';
+  const isTransportMode = normalizedMode === 'transport';
+  const isTreatmentMode = normalizedMode === 'treatment';
+  const showTreatmentLogSection = !isTransportMode;
+  const showTransportTrackerSection = !isTreatmentMode;
+  const showPrimaryAssessmentSection = !isTransportMode;
+  const showVitalsSection = !isTransportMode;
+  const showMciSection = !isTransportMode;
+  const showSecondaryQuestionsSection = !isTransportMode;
+  const showBodyDiagramTools = !isTransportMode;
   const [history, setHistory] = useState([]);
   const [selectedAnalysisId, setSelectedAnalysisId] = useState(null);
   const [draft, setDraft] = useState(() => buildDefaultDraft(person));
@@ -417,13 +424,27 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
       setHistory(list);
       setSelectedAnalysisId(saved?.id || null);
       setDraft(toDraft(person, saved));
-      setMessage(selectedAnalysisId ? 'Patient analysis updated.' : 'Patient analysis saved.');
+      if (isTransportMode) {
+        setMessage(selectedAnalysisId ? 'Transport tracker updated.' : 'Transport tracker saved.');
+      } else {
+        setMessage(selectedAnalysisId ? 'Patient analysis updated.' : 'Patient analysis saved.');
+      }
     } catch (err) {
-      setError(err?.message || 'Failed to save patient analysis');
+      setError(err?.message || (isTransportMode ? 'Failed to save transport tracker' : 'Failed to save patient analysis'));
     } finally {
       setSaving(false);
     }
   }
+
+  const treatmentLogCount = Array.isArray(draft.treatment_log) ? draft.treatment_log.length : 0;
+  const transportStatusText = String(draft.transport?.status || '').trim()
+    ? formatStatusLabel(draft.transport?.status)
+    : 'Not transporting';
+  const saveButtonText = saving
+    ? (isTransportMode ? 'Saving Transport Update...' : 'Saving Analysis...')
+    : (selectedAnalysisId
+      ? (isTransportMode ? 'Update Transport' : 'Update Analysis')
+      : (isTransportMode ? 'Save Transport Update' : 'Save Analysis'));
 
   return (
     <div className="space-y-4">
@@ -467,116 +488,147 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-4">
         <div className="space-y-4">
-          <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
-            <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Primary Assessment</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs text-cad-muted mb-1">Triage Category</label>
-                <select
-                  value={draft.triage_category}
-                  onChange={(event) => setDraft((current) => ({ ...current, triage_category: event.target.value }))}
-                  className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-                >
-                  {TRIAGE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
+          {showPrimaryAssessmentSection && (
+            <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
+              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Primary Assessment</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-cad-muted mb-1">Triage Category</label>
+                  <select
+                    value={draft.triage_category}
+                    onChange={(event) => setDraft((current) => ({ ...current, triage_category: event.target.value }))}
+                    className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
+                  >
+                    {TRIAGE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-cad-muted mb-1">Pain Score ({draft.pain_score}/10)</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    step="1"
+                    value={draft.pain_score}
+                    onChange={(event) => setDraft((current) => ({ ...current, pain_score: Number(event.target.value || 0) }))}
+                    className="w-full"
+                  />
+                </div>
               </div>
+
               <div>
-                <label className="block text-xs text-cad-muted mb-1">Pain Score ({draft.pain_score}/10)</label>
+                <label className="block text-xs text-cad-muted mb-1">Chief Complaint</label>
                 <input
-                  type="range"
-                  min="0"
-                  max="10"
-                  step="1"
-                  value={draft.pain_score}
-                  onChange={(event) => setDraft((current) => ({ ...current, pain_score: Number(event.target.value || 0) }))}
-                  className="w-full"
+                  type="text"
+                  value={draft.chief_complaint}
+                  onChange={(event) => setDraft((current) => ({ ...current, chief_complaint: event.target.value }))}
+                  placeholder="Primary complaint / reason for attendance"
+                  className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
                 />
               </div>
-            </div>
 
-            <div>
-              <label className="block text-xs text-cad-muted mb-1">Chief Complaint</label>
-              <input
-                type="text"
-                value={draft.chief_complaint}
-                onChange={(event) => setDraft((current) => ({ ...current, chief_complaint: event.target.value }))}
-                placeholder="Primary complaint / reason for attendance"
-                className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-cad-muted mb-1">Conscious State</label>
+                  <select
+                    value={draft.questionnaire?.conscious_state || ''}
+                    onChange={(event) => updateQuestionnaire('conscious_state', event.target.value)}
+                    className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
+                  >
+                    <option value="">Select...</option>
+                    <option value="alert">Alert</option>
+                    <option value="verbal">Responds To Verbal</option>
+                    <option value="pain">Responds To Pain</option>
+                    <option value="unresponsive">Unresponsive</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-cad-muted mb-1">Airway</label>
+                  <select
+                    value={draft.questionnaire?.airway_state || ''}
+                    onChange={(event) => updateQuestionnaire('airway_state', event.target.value)}
+                    className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
+                  >
+                    <option value="">Select...</option>
+                    <option value="clear">Clear</option>
+                    <option value="compromised">Compromised</option>
+                    <option value="obstructed">Obstructed</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-cad-muted mb-1">Breathing</label>
+                  <select
+                    value={draft.questionnaire?.breathing_state || ''}
+                    onChange={(event) => updateQuestionnaire('breathing_state', event.target.value)}
+                    className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
+                  >
+                    <option value="">Select...</option>
+                    <option value="normal">Normal</option>
+                    <option value="laboured">Laboured</option>
+                    <option value="assisted">Assisted</option>
+                    <option value="apnoea">Apnoea</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-cad-muted mb-1">Circulation</label>
+                  <select
+                    value={draft.questionnaire?.circulation_state || ''}
+                    onChange={(event) => updateQuestionnaire('circulation_state', event.target.value)}
+                    className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
+                  >
+                    <option value="">Select...</option>
+                    <option value="stable">Stable</option>
+                    <option value="bleeding">Bleeding</option>
+                    <option value="shock">Shock</option>
+                    <option value="arrest">Cardiac Arrest</option>
+                  </select>
+                </div>
+              </div>
             </div>
+          )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs text-cad-muted mb-1">Conscious State</label>
-                <select
-                  value={draft.questionnaire?.conscious_state || ''}
-                  onChange={(event) => updateQuestionnaire('conscious_state', event.target.value)}
-                  className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-                >
-                  <option value="">Select...</option>
-                  <option value="alert">Alert</option>
-                  <option value="verbal">Responds To Verbal</option>
-                  <option value="pain">Responds To Pain</option>
-                  <option value="unresponsive">Unresponsive</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-cad-muted mb-1">Airway</label>
-                <select
-                  value={draft.questionnaire?.airway_state || ''}
-                  onChange={(event) => updateQuestionnaire('airway_state', event.target.value)}
-                  className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-                >
-                  <option value="">Select...</option>
-                  <option value="clear">Clear</option>
-                  <option value="compromised">Compromised</option>
-                  <option value="obstructed">Obstructed</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-cad-muted mb-1">Breathing</label>
-                <select
-                  value={draft.questionnaire?.breathing_state || ''}
-                  onChange={(event) => updateQuestionnaire('breathing_state', event.target.value)}
-                  className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-                >
-                  <option value="">Select...</option>
-                  <option value="normal">Normal</option>
-                  <option value="laboured">Laboured</option>
-                  <option value="assisted">Assisted</option>
-                  <option value="apnoea">Apnoea</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-cad-muted mb-1">Circulation</label>
-                <select
-                  value={draft.questionnaire?.circulation_state || ''}
-                  onChange={(event) => updateQuestionnaire('circulation_state', event.target.value)}
-                  className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-                >
-                  <option value="">Select...</option>
-                  <option value="stable">Stable</option>
-                  <option value="bleeding">Bleeding</option>
-                  <option value="shock">Shock</option>
-                  <option value="arrest">Cardiac Arrest</option>
-                </select>
+          {showVitalsSection && (
+            <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
+              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Vitals</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <input value={draft.vitals?.pulse || ''} onChange={(e) => updateVitals('pulse', e.target.value)} placeholder="Pulse (bpm)" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+                <input value={draft.vitals?.blood_pressure || ''} onChange={(e) => updateVitals('blood_pressure', e.target.value)} placeholder="Blood Pressure (mmHg)" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+                <input value={draft.vitals?.respiratory_rate || ''} onChange={(e) => updateVitals('respiratory_rate', e.target.value)} placeholder="Respiratory Rate" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+                <input value={draft.vitals?.spo2 || ''} onChange={(e) => updateVitals('spo2', e.target.value)} placeholder="SpO2 (%)" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+                <input value={draft.vitals?.temperature || ''} onChange={(e) => updateVitals('temperature', e.target.value)} placeholder="Temperature (C)" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+                <input value={draft.vitals?.glucose || ''} onChange={(e) => updateVitals('glucose', e.target.value)} placeholder="Glucose (mmol/L)" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
-            <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Vitals</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <input value={draft.vitals?.pulse || ''} onChange={(e) => updateVitals('pulse', e.target.value)} placeholder="Pulse (bpm)" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
-              <input value={draft.vitals?.blood_pressure || ''} onChange={(e) => updateVitals('blood_pressure', e.target.value)} placeholder="Blood Pressure (mmHg)" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
-              <input value={draft.vitals?.respiratory_rate || ''} onChange={(e) => updateVitals('respiratory_rate', e.target.value)} placeholder="Respiratory Rate" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
-              <input value={draft.vitals?.spo2 || ''} onChange={(e) => updateVitals('spo2', e.target.value)} placeholder="SpO2 (%)" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
-              <input value={draft.vitals?.temperature || ''} onChange={(e) => updateVitals('temperature', e.target.value)} placeholder="Temperature (C)" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
-              <input value={draft.vitals?.glucose || ''} onChange={(e) => updateVitals('glucose', e.target.value)} placeholder="Glucose (mmol/L)" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+          {isTransportMode && (
+            <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
+              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Transport Handover Context</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <div className="rounded border border-cad-border bg-cad-card px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wider text-cad-muted">Chief Complaint</p>
+                  <p className="mt-1 text-cad-ink">{draft.chief_complaint || '-'}</p>
+                </div>
+                <div className="rounded border border-cad-border bg-cad-card px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wider text-cad-muted">Triage</p>
+                  <p className="mt-1 text-cad-ink">{formatStatusLabel(draft.triage_category || 'undetermined') || 'Undetermined'}</p>
+                </div>
+                <div className="rounded border border-cad-border bg-cad-card px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wider text-cad-muted">Treatments Logged</p>
+                  <p className="mt-1 text-cad-ink">{treatmentLogCount}</p>
+                </div>
+                <div className="rounded border border-cad-border bg-cad-card px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wider text-cad-muted">Transport Status</p>
+                  <p className="mt-1 text-cad-ink">{transportStatusText}</p>
+                </div>
+              </div>
+              <p className="text-xs text-cad-muted">
+                Assessment, vitals, treatment entries, and MCI tagging are managed in the Treatment Log tab to avoid duplicate charting.
+              </p>
             </div>
-          </div>
+          )}
 
           {showTreatmentLogSection && (
             <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
@@ -733,82 +785,90 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
             </div>
           )}
 
-          <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
-            <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">MCI / START Triage</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <input
-                value={draft.mci_incident_key || ''}
-                onChange={(e) => setDraft((current) => ({ ...current, mci_incident_key: e.target.value }))}
-                placeholder="MCI Incident Key (shared across patients)"
-                className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-              />
-              <select
-                value={draft.mci_tag || ''}
-                onChange={(e) => setDraft((current) => ({ ...current, mci_tag: e.target.value }))}
-                className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-              >
-                {MCI_TAG_OPTIONS.map((option) => (
-                  <option key={option.value || 'none'} value={option.value}>{option.label}</option>
-                ))}
-              </select>
+          {showMciSection && (
+            <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
+              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">MCI / START Triage</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <input
+                  value={draft.mci_incident_key || ''}
+                  onChange={(e) => setDraft((current) => ({ ...current, mci_incident_key: e.target.value }))}
+                  placeholder="MCI Incident Key (shared across patients)"
+                  className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
+                />
+                <select
+                  value={draft.mci_tag || ''}
+                  onChange={(e) => setDraft((current) => ({ ...current, mci_tag: e.target.value }))}
+                  className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
+                >
+                  {MCI_TAG_OPTIONS.map((option) => (
+                    <option key={option.value || 'none'} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs text-cad-muted">
+                Use the same incident key for all patients in a mass casualty incident to group them together.
+              </p>
             </div>
-            <p className="text-xs text-cad-muted">
-              Use the same incident key for all patients in a mass casualty incident to group them together.
-            </p>
-          </div>
+          )}
 
-          <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
-            <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Secondary Questions</h4>
-            <input value={draft.questionnaire?.mechanism || ''} onChange={(e) => updateQuestionnaire('mechanism', e.target.value)} placeholder="Mechanism of injury / illness" className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
-            <input value={draft.questionnaire?.onset || ''} onChange={(e) => updateQuestionnaire('onset', e.target.value)} placeholder="Onset / timeline" className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
-            <input value={draft.questionnaire?.allergies || ''} onChange={(e) => updateQuestionnaire('allergies', e.target.value)} placeholder="Allergies" className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
-            <input value={draft.questionnaire?.medications || ''} onChange={(e) => updateQuestionnaire('medications', e.target.value)} placeholder="Current medications" className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
-            <textarea value={draft.questionnaire?.treatment_given || ''} onChange={(e) => updateQuestionnaire('treatment_given', e.target.value)} placeholder="Treatment provided" rows={3} className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
-            <textarea value={draft.notes} onChange={(e) => setDraft((current) => ({ ...current, notes: e.target.value }))} placeholder="Clinical notes..." rows={4} className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
-          </div>
+          {showSecondaryQuestionsSection && (
+            <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
+              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Secondary Questions</h4>
+              <input value={draft.questionnaire?.mechanism || ''} onChange={(e) => updateQuestionnaire('mechanism', e.target.value)} placeholder="Mechanism of injury / illness" className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+              <input value={draft.questionnaire?.onset || ''} onChange={(e) => updateQuestionnaire('onset', e.target.value)} placeholder="Onset / timeline" className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+              <input value={draft.questionnaire?.allergies || ''} onChange={(e) => updateQuestionnaire('allergies', e.target.value)} placeholder="Allergies" className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+              <input value={draft.questionnaire?.medications || ''} onChange={(e) => updateQuestionnaire('medications', e.target.value)} placeholder="Current medications" className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+              <textarea value={draft.questionnaire?.treatment_given || ''} onChange={(e) => updateQuestionnaire('treatment_given', e.target.value)} placeholder="Treatment provided" rows={3} className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+              <textarea value={draft.notes} onChange={(e) => setDraft((current) => ({ ...current, notes: e.target.value }))} placeholder="Clinical notes..." rows={4} className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+            </div>
+          )}
         </div>
 
         <div className="space-y-4">
-          <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-2">
-            <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Marker Tool</h4>
-            <div className="grid grid-cols-1 gap-2">
-              <select
-                value={markType}
-                onChange={(event) => setMarkType(event.target.value)}
-                className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-              >
-                {MARK_TYPES.map((type) => (
-                  <option key={type} value={type}>{formatStatusLabel(type)}</option>
-                ))}
-              </select>
-              <select
-                value={markSeverity}
-                onChange={(event) => setMarkSeverity(event.target.value)}
-                className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-              >
-                {MARK_SEVERITY.map((severity) => (
-                  <option key={severity} value={severity}>{formatStatusLabel(severity)}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => setDraft((current) => ({ ...current, body_marks: [] }))}
-                className="px-3 py-2 border border-cad-border rounded text-sm text-cad-muted hover:text-cad-ink hover:border-cad-border-light"
-              >
-                Clear All Markers
-              </button>
+          {showBodyDiagramTools && (
+            <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-2">
+              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Marker Tool</h4>
+              <div className="grid grid-cols-1 gap-2">
+                <select
+                  value={markType}
+                  onChange={(event) => setMarkType(event.target.value)}
+                  className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
+                >
+                  {MARK_TYPES.map((type) => (
+                    <option key={type} value={type}>{formatStatusLabel(type)}</option>
+                  ))}
+                </select>
+                <select
+                  value={markSeverity}
+                  onChange={(event) => setMarkSeverity(event.target.value)}
+                  className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
+                >
+                  {MARK_SEVERITY.map((severity) => (
+                    <option key={severity} value={severity}>{formatStatusLabel(severity)}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setDraft((current) => ({ ...current, body_marks: [] }))}
+                  className="px-3 py-2 border border-cad-border rounded text-sm text-cad-muted hover:text-cad-ink hover:border-cad-border-light"
+                >
+                  Clear All Markers
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          <BodyDiagram
-            marks={draft.body_marks}
-            activeView={activeBodyView}
-            onChangeView={setActiveBodyView}
-            onAddMark={addBodyMark}
-            onRemoveMark={removeBodyMark}
-            markType={markType}
-            markSeverity={markSeverity}
-          />
+          {showBodyDiagramTools && (
+            <BodyDiagram
+              marks={draft.body_marks}
+              activeView={activeBodyView}
+              onChangeView={setActiveBodyView}
+              onAddMark={addBodyMark}
+              onRemoveMark={removeBodyMark}
+              markType={markType}
+              markSeverity={markSeverity}
+            />
+          )}
 
           <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-2">
             <div className="flex items-center justify-between gap-2">
@@ -858,7 +918,7 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
             disabled={saving}
             className="w-full px-4 py-2 bg-cad-accent hover:bg-cad-accent-light text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
           >
-            {saving ? 'Saving Analysis...' : (selectedAnalysisId ? 'Update Analysis' : 'Save Analysis')}
+            {saveButtonText}
           </button>
         </div>
       </div>

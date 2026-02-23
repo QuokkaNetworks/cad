@@ -214,28 +214,58 @@ async function syncJobRolesFromGame(user, member, mappings) {
     return { enabled: true, changed: false, reason: 'no_preferred_citizen_id' };
   }
 
-  let gameJob = null;
+  let gameJobs = [];
   try {
-    gameJob = await qbox.getCharacterJobById(citizenId);
+    if (typeof qbox.getPlayerCharacterJobsByCitizenId === 'function') {
+      const characterJobs = await qbox.getPlayerCharacterJobsByCitizenId(citizenId);
+      if (Array.isArray(characterJobs)) {
+        gameJobs = characterJobs
+          .map(job => ({
+            name: String(job?.name || '').trim(),
+            grade: normalizeGrade(job?.grade || 0),
+            citizenid: String(job?.citizenid || '').trim(),
+          }))
+          .filter(job => job.name);
+      }
+    }
+    if (gameJobs.length === 0) {
+      const gameJob = await qbox.getCharacterJobById(citizenId);
+      const name = String(gameJob?.name || '').trim();
+      if (name) {
+        gameJobs = [{
+          name,
+          grade: normalizeGrade(gameJob?.grade || 0),
+          citizenid: String(gameJob?.citizenid || citizenId || '').trim(),
+        }];
+      }
+    }
   } catch (err) {
     const msg = String(err?.message || err || 'Unknown QBX lookup error');
     console.warn(`[Discord] Reverse job role sync lookup failed for user ${user.id} (${citizenId}): ${msg}`);
     return { enabled: true, changed: false, reason: 'lookup_failed', error: msg };
   }
 
-  const jobName = String(gameJob?.name || '').trim();
-  if (!jobName) {
-    return { enabled: true, changed: false, reason: 'game_job_not_found' };
-  }
-  const jobGrade = normalizeGrade(gameJob?.grade || 0);
-  const jobNameKey = normalizeJobNameKey(jobName);
+  const dedupedGameJobs = Array.from(new Map(
+    gameJobs.map((job) => {
+      const name = String(job?.name || '').trim();
+      const grade = normalizeGrade(job?.grade || 0);
+      const rowCitizenId = String(job?.citizenid || '').trim();
+      return [`${normalizeJobNameKey(name)}::${grade}`, { name, grade, citizenid: rowCitizenId }];
+    })
+  ).values()).filter(job => job.name);
+  const primaryJob = dedupedGameJobs[0] || null;
+  const characterJobsSummary = dedupedGameJobs.map(job => ({
+    citizen_id: String(job.citizenid || '').trim(),
+    job_name: job.name,
+    job_grade: normalizeGrade(job.grade),
+  }));
 
   const desiredRoleIds = new Set(
     jobMappings
-      .filter(mapping => (
-        normalizeJobNameKey(mapping.job_name) === jobNameKey
-        && normalizeGrade(mapping.job_grade) === jobGrade
-      ))
+      .filter((mapping) => dedupedGameJobs.some((job) => (
+        normalizeJobNameKey(mapping.job_name) === normalizeJobNameKey(job.name)
+        && normalizeGrade(mapping.job_grade) === normalizeGrade(job.grade)
+      )))
       .map(mapping => String(mapping.discord_role_id))
   );
   const managedRoleIds = new Set(jobMappings.map(mapping => String(mapping.discord_role_id)));
@@ -259,9 +289,11 @@ async function syncJobRolesFromGame(user, member, mappings) {
     return {
       enabled: true,
       changed: false,
-      reason: 'already_synced',
-      job_name: jobName,
-      job_grade: jobGrade,
+      reason: primaryJob ? 'already_synced' : 'no_game_jobs',
+      job_name: primaryJob?.name || '',
+      job_grade: primaryJob ? normalizeGrade(primaryJob.grade) : 0,
+      job_groups: characterJobsSummary.map(job => ({ job_name: job.job_name, job_grade: job.job_grade })),
+      character_jobs: characterJobsSummary,
     };
   }
 
@@ -271,7 +303,7 @@ async function syncJobRolesFromGame(user, member, mappings) {
 
   for (const roleId of toAdd) {
     try {
-      await member.roles.add(roleId, `CAD reverse job sync: ${jobName} (${jobGrade})`);
+      await member.roles.add(roleId, `CAD reverse job sync (${dedupedGameJobs.length} character job(s))`);
       addedRoles.push(roleId);
     } catch (err) {
       errors.push(`add ${roleId}: ${String(err?.message || err || 'unknown error')}`);
@@ -279,7 +311,7 @@ async function syncJobRolesFromGame(user, member, mappings) {
   }
   for (const roleId of toRemove) {
     try {
-      await member.roles.remove(roleId, `CAD reverse job sync: ${jobName} (${jobGrade})`);
+      await member.roles.remove(roleId, `CAD reverse job sync (${dedupedGameJobs.length} character job(s))`);
       removedRoles.push(roleId);
     } catch (err) {
       errors.push(`remove ${roleId}: ${String(err?.message || err || 'unknown error')}`);
@@ -290,8 +322,10 @@ async function syncJobRolesFromGame(user, member, mappings) {
     audit(user.id, 'discord_job_role_sync_from_game', {
       discordId: user.discord_id,
       citizenId,
-      job_name: jobName,
-      job_grade: jobGrade,
+      job_name: primaryJob?.name || '',
+      job_grade: primaryJob ? normalizeGrade(primaryJob.grade) : 0,
+      job_groups: characterJobsSummary.map(job => ({ job_name: job.job_name, job_grade: job.job_grade })),
+      character_jobs: characterJobsSummary,
       added_roles: addedRoles,
       removed_roles: removedRoles,
       errors,
@@ -302,8 +336,10 @@ async function syncJobRolesFromGame(user, member, mappings) {
     enabled: true,
     changed: addedRoles.length > 0 || removedRoles.length > 0,
     reason: errors.length > 0 ? 'partial' : 'synced',
-    job_name: jobName,
-    job_grade: jobGrade,
+    job_name: primaryJob?.name || '',
+    job_grade: primaryJob ? normalizeGrade(primaryJob.grade) : 0,
+    job_groups: characterJobsSummary.map(job => ({ job_name: job.job_name, job_grade: job.job_grade })),
+    character_jobs: characterJobsSummary,
     added_roles: addedRoles,
     removed_roles: removedRoles,
     errors,

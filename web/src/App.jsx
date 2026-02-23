@@ -30,6 +30,7 @@ import AdminSystemSettings from './pages/admin/SystemSettings';
 import AdminHome from './pages/admin/Home';
 import AdminOffenceCatalog from './pages/admin/OffenceCatalog';
 import AdminQboxSettings from './pages/admin/QboxSettings';
+import AdminJobBindings from './pages/admin/JobBindings';
 
 export default function App() {
   return (
@@ -73,6 +74,7 @@ export default function App() {
             <Route path="/admin/departments" element={<ProtectedRoute requireAdmin><AdminDepartments /></ProtectedRoute>} />
             <Route path="/admin/offences" element={<ProtectedRoute requireAdmin><AdminOffenceCatalog /></ProtectedRoute>} />
             <Route path="/admin/role-mappings" element={<ProtectedRoute requireAdmin><AdminRoleMappings /></ProtectedRoute>} />
+            <Route path="/admin/job-bindings" element={<ProtectedRoute requireAdmin><AdminJobBindings /></ProtectedRoute>} />
             <Route path="/admin/audit-log" element={<ProtectedRoute requireAdmin><AdminAuditLog /></ProtectedRoute>} />
             <Route path="/admin/settings" element={<ProtectedRoute requireAdmin><AdminSystemSettings /></ProtectedRoute>} />
             <Route path="/admin/qbox-settings" element={<ProtectedRoute requireAdmin><AdminQboxSettings /></ProtectedRoute>} />

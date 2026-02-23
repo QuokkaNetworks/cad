@@ -6,6 +6,7 @@ import { api } from '../../api/client';
 import UnitCard from '../../components/UnitCard';
 import StatusBadge from '../../components/StatusBadge';
 import Modal from '../../components/Modal';
+import OffDutySummaryModal from '../../components/OffDutySummaryModal';
 import { DEPARTMENT_LAYOUT, getDepartmentLayoutType } from '../../utils/departmentLayout';
 import { formatDateTimeAU } from '../../utils/dateTime';
 
@@ -31,16 +32,28 @@ export default function Units() {
   const [shiftNotesLoading, setShiftNotesLoading] = useState(false);
   const [shiftNoteSaving, setShiftNoteSaving] = useState(false);
   const [shiftNoteDraft, setShiftNoteDraft] = useState('');
+  const [offDutySummary, setOffDutySummary] = useState(null);
 
   const deptId = activeDepartment?.id;
   const layoutType = getDepartmentLayoutType(activeDepartment);
   const isLaw = layoutType === DEPARTMENT_LAYOUT.LAW_ENFORCEMENT;
   const isParamedics = layoutType === DEPARTMENT_LAYOUT.PARAMEDICS;
+  const isFire = layoutType === DEPARTMENT_LAYOUT.FIRE;
   const isDispatchDepartment = !!activeDepartment?.is_dispatch;
   const canSelfDispatch = !!(myUnit && !dispatchStatus.dispatcher_online && !dispatchStatus.is_dispatch_department);
   const isMyUnitAvailable = normalizeUnitStatus(myUnit?.status) === 'available';
   const canSelfAssign = canSelfDispatch && isMyUnitAvailable;
   const hideSharedPanels = !!(dispatchStatus.dispatcher_online && !dispatchStatus.is_dispatch_department);
+  const callNoun = isFire ? 'incident' : 'call';
+  const callNounTitle = isFire ? 'Incident' : 'Call';
+  const shiftLogTitle = isLaw ? 'Officer Shift Log' : isParamedics ? 'Crew Shift Log' : 'Crew / Appliance Shift Log';
+  const shiftNotePlaceholder = myUnit
+    ? (isFire
+      ? 'Document handoff notes, apparatus status, hazards, or follow-ups...'
+      : 'Document shift handoff notes, observations, or follow-ups...')
+    : 'Go on duty to start your shift notes.';
+  const addShiftNoteLabel = isFire ? 'Add Handoff Note' : 'Add Shift Note';
+  const assignedUnitsLabel = isFire ? 'Assigned Units / Appliances' : 'Assigned Units';
 
   const fetchData = useCallback(async () => {
     if (!deptId) return;
@@ -104,10 +117,11 @@ export default function Units() {
   async function goOffDuty() {
     if (!confirm('Go off duty?')) return;
     try {
-      await api.delete('/api/units/me');
+      const response = await api.delete('/api/units/me');
       setMyUnit(null);
       setCurrentCall(null);
       setSelectedCall(null);
+      setOffDutySummary(response?.summary || null);
       fetchData();
     } catch (err) {
       alert('Failed to go off duty: ' + err.message);
@@ -185,7 +199,7 @@ export default function Units() {
   return (
     <div>
       <h2 className="text-xl font-bold mb-6">
-        {isLaw ? 'Unit Management' : isParamedics ? 'Crew & Patient Response' : 'Appliance & Incident Response'}
+        {isLaw ? 'Unit Management' : isParamedics ? 'Crew & Patient Response' : 'Appliance & Incident Board'}
       </h2>
 
       {/* My unit / Go on duty */}
@@ -205,19 +219,21 @@ export default function Units() {
 
           <div className="mt-4 bg-cad-surface border border-cad-border rounded-lg p-3">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <h4 className="text-xs font-semibold text-cad-muted uppercase tracking-wider">Current Attached Call</h4>
+              <h4 className="text-xs font-semibold text-cad-muted uppercase tracking-wider">
+                {isFire ? 'Current Incident Assignment' : 'Current Attached Call'}
+              </h4>
               {currentCall && (
                 <button
                   onClick={() => setSelectedCall(currentCall)}
                   className="px-2 py-1 text-[11px] bg-cad-card border border-cad-border rounded text-cad-muted hover:text-cad-ink"
                 >
-                  Open Details
+                  {isFire ? 'Open Incident' : 'Open Details'}
                 </button>
               )}
             </div>
 
             {!currentCall ? (
-              <p className="text-sm text-cad-muted">You are not attached to an active call.</p>
+              <p className="text-sm text-cad-muted">You are not attached to an active {callNoun}.</p>
             ) : (
               <div className="space-y-2">
                 <div>
@@ -231,7 +247,7 @@ export default function Units() {
                       onClick={() => unassignMyUnit(currentCall.id)}
                       className="px-2 py-1 text-xs bg-red-500/10 text-red-400 border border-red-500/30 rounded hover:bg-red-500/20 transition-colors"
                     >
-                      Leave Call
+                      {isFire ? 'Leave Incident' : 'Leave Call'}
                     </button>
                   )}
                   {currentCall.status !== 'closed' && (
@@ -239,7 +255,7 @@ export default function Units() {
                       onClick={() => closeMyCall(currentCall.id)}
                       className="px-2 py-1 text-xs bg-red-500/10 text-red-400 border border-red-500/30 rounded hover:bg-red-500/20 transition-colors"
                     >
-                      Close Call
+                      {isFire ? 'Close Incident' : 'Close Call'}
                     </button>
                   )}
                 </div>
@@ -261,7 +277,7 @@ export default function Units() {
       <div className="bg-cad-card border border-cad-border rounded-lg p-5 mb-6">
         <div className="flex items-center justify-between gap-2 mb-3">
           <h3 className="font-semibold">
-            {isLaw ? 'Officer Shift Log' : isParamedics ? 'Crew Shift Log' : 'Shift Log'}
+            {shiftLogTitle}
           </h3>
           <span className="text-xs text-cad-muted">
             {shiftNotes.length} note{shiftNotes.length === 1 ? '' : 's'}
@@ -272,7 +288,7 @@ export default function Units() {
             value={shiftNoteDraft}
             onChange={(e) => setShiftNoteDraft(e.target.value)}
             rows={2}
-            placeholder={myUnit ? 'Document shift handoff notes, observations, or follow-ups...' : 'Go on duty to start your shift notes.'}
+            placeholder={shiftNotePlaceholder}
             disabled={!deptId || !myUnit || shiftNoteSaving}
             className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm resize-none disabled:opacity-60"
           />
@@ -283,7 +299,7 @@ export default function Units() {
               disabled={!myUnit || !String(shiftNoteDraft || '').trim() || shiftNoteSaving}
               className="px-3 py-1.5 bg-cad-accent hover:bg-cad-accent-light text-white rounded text-sm font-medium disabled:opacity-50"
             >
-              {shiftNoteSaving ? 'Saving...' : 'Add Shift Note'}
+              {shiftNoteSaving ? 'Saving...' : addShiftNoteLabel}
             </button>
           </div>
         </div>
@@ -313,9 +329,9 @@ export default function Units() {
         <div className="bg-cad-card border border-cad-border rounded-lg p-5">
           <h3 className="font-semibold mb-1">Dispatcher Online</h3>
           <p className="text-sm text-cad-muted">
-            {dispatchStatus.dispatch_department?.name || 'Police Communications'} currently has{' '}
+            {dispatchStatus.dispatch_department?.name || 'Dispatch'} currently has{' '}
             {dispatchStatus.online_count} dispatcher{dispatchStatus.online_count === 1 ? '' : 's'} on duty.
-            Self-dispatch panels are hidden while dispatchers are active.
+            Self-assignment panels are hidden while dispatchers are active.
           </p>
         </div>
       ) : (
@@ -327,16 +343,16 @@ export default function Units() {
                 {isLaw ? 'Self Dispatch' : isParamedics ? 'Assign to Patient Calls' : 'Assign to Incident Calls'}
               </h3>
               {!myUnit && (
-                <p className="text-sm text-cad-muted">Go on duty first to self-dispatch to active calls.</p>
+                <p className="text-sm text-cad-muted">Go on duty first to self-dispatch to active {isFire ? 'incidents' : 'calls'}.</p>
               )}
               {myUnit && calls.length === 0 && (
-                <p className="text-sm text-cad-muted">No active calls available.</p>
+                <p className="text-sm text-cad-muted">No active {isFire ? 'incidents' : 'calls'} available.</p>
               )}
               {myUnit && calls.length > 0 && (
                 <div className="space-y-2">
                   {!isMyUnitAvailable && (
                     <p className="text-xs text-amber-300">
-                      Your unit is currently {myUnit.status || 'unavailable'}. Set status to Available to attach to calls.
+                      Your unit is currently {myUnit.status || 'unavailable'}. Set status to Available to attach to {isFire ? 'incidents' : 'calls'}.
                     </p>
                   )}
                   {calls.map(call => {
@@ -355,7 +371,7 @@ export default function Units() {
                               onClick={() => setSelectedCall(call)}
                               className="px-2 py-1 text-xs bg-cad-card border border-cad-border rounded text-cad-muted hover:text-cad-ink transition-colors"
                             >
-                              Details
+                              {isFire ? 'Incident' : 'Details'}
                             </button>
                             <StatusBadge status={call.status} />
                             {assigned ? (
@@ -364,7 +380,7 @@ export default function Units() {
                                   onClick={() => unassignMyUnit(call.id)}
                                   className="px-2 py-1 text-xs bg-red-500/10 text-red-400 border border-red-500/30 rounded hover:bg-red-500/20 transition-colors"
                                 >
-                                  Leave
+                                  {isFire ? 'Leave Incident' : 'Leave'}
                                 </button>
                               </>
                             ) : (
@@ -373,7 +389,7 @@ export default function Units() {
                                 disabled={!canSelfAssign}
                                 className="px-2 py-1 text-xs bg-cad-accent/20 text-cad-accent-light border border-cad-accent/30 rounded hover:bg-cad-accent/30 transition-colors disabled:opacity-50"
                               >
-                                Self Assign
+                                {isFire ? 'Join Incident' : 'Self Assign'}
                               </button>
                             )}
                             {call.status !== 'closed' && (
@@ -381,7 +397,7 @@ export default function Units() {
                                 onClick={() => closeMyCall(call.id)}
                                 className="px-2 py-1 text-xs bg-red-500/10 text-red-400 border border-red-500/30 rounded hover:bg-red-500/20 transition-colors"
                               >
-                                Close
+                                {isFire ? 'Close Incident' : 'Close'}
                               </button>
                             )}
                           </div>
@@ -396,7 +412,7 @@ export default function Units() {
 
           {/* All units */}
           <h3 className="text-sm font-semibold text-cad-muted uppercase tracking-wider mb-3">
-            All On-Duty Units ({units.length})
+            {isFire ? 'All On-Duty Units / Appliances' : 'All On-Duty Units'} ({units.length})
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {units.map(unit => (
@@ -409,7 +425,7 @@ export default function Units() {
         </>
       )}
 
-      <Modal open={!!selectedCall} onClose={() => setSelectedCall(null)} title={`Call #${selectedCall?.id}`} wide>
+      <Modal open={!!selectedCall} onClose={() => setSelectedCall(null)} title={`${callNounTitle} #${selectedCall?.id}`} wide>
         {selectedCall && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 flex-wrap">
@@ -447,7 +463,7 @@ export default function Units() {
                   onClick={() => unassignMyUnit(selectedCall.id)}
                   className="px-3 py-1.5 text-xs bg-red-500/10 text-red-400 border border-red-500/30 rounded hover:bg-red-500/20 transition-colors"
                 >
-                  Leave Call
+                  {isFire ? 'Leave Incident' : 'Leave Call'}
                 </button>
               )}
               {myUnit && selectedCall.status !== 'closed' && (
@@ -455,7 +471,7 @@ export default function Units() {
                   onClick={() => closeMyCall(selectedCall.id)}
                   className="px-3 py-1.5 text-xs bg-red-500/10 text-red-400 border border-red-500/30 rounded hover:bg-red-500/20 transition-colors"
                 >
-                  Close Call
+                  {isFire ? 'Close Incident' : 'Close Call'}
                 </button>
               )}
               {myUnit && selectedCall.status !== 'closed' && !selectedCall.assigned_units?.some(u => u.id === myUnit.id) && (
@@ -464,13 +480,13 @@ export default function Units() {
                   disabled={!canSelfAssign}
                   className="px-3 py-1.5 text-xs bg-cad-accent/20 text-cad-accent-light border border-cad-accent/30 rounded hover:bg-cad-accent/30 transition-colors disabled:opacity-50"
                 >
-                  Self Assign
+                  {isFire ? 'Join Incident' : 'Self Assign'}
                 </button>
               )}
             </div>
 
             <div>
-              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider mb-2">Assigned Units</h4>
+              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider mb-2">{assignedUnitsLabel}</h4>
               {selectedCall.assigned_units?.length > 0 ? (
                 <div className="space-y-1">
                   {selectedCall.assigned_units.map(u => (
@@ -490,6 +506,12 @@ export default function Units() {
           </div>
         )}
       </Modal>
+
+      <OffDutySummaryModal
+        open={!!offDutySummary}
+        summary={offDutySummary}
+        onClose={() => setOffDutySummary(null)}
+      />
     </div>
   );
 }

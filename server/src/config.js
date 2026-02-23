@@ -78,6 +78,9 @@ module.exports = {
     clientId: process.env.DISCORD_CLIENT_ID || '',
     clientSecret: process.env.DISCORD_CLIENT_SECRET || '',
     periodicSyncMinutes: parseIntEnv(process.env.DISCORD_PERIODIC_SYNC_MINUTES, 10),
+    warrantCommunityWebhookUrl: process.env.DISCORD_WARRANT_COMMUNITY_WEBHOOK_URL || '',
+    warrantCommunityPosterTemplatePath: process.env.DISCORD_WARRANT_COMMUNITY_POSTER_TEMPLATE_PATH || '',
+    warrantCommunityDefaultLocation: process.env.DISCORD_WARRANT_COMMUNITY_DEFAULT_LOCATION || 'Los Santos',
   },
   autoUpdate: {
     enabled: String(process.env.AUTO_UPDATE_ENABLED || 'false').toLowerCase() === 'true',

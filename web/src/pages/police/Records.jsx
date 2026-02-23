@@ -500,6 +500,7 @@ export default function Records({ embeddedPerson = null, embeddedDepartmentId = 
   const layoutType = getDepartmentLayoutType(activeDepartment);
   const isLaw = layoutType === DEPARTMENT_LAYOUT.LAW_ENFORCEMENT;
   const isParamedics = layoutType === DEPARTMENT_LAYOUT.PARAMEDICS;
+  const isFire = layoutType === DEPARTMENT_LAYOUT.FIRE;
   const isEmbedded = !!embeddedPerson;
   const effectiveDepartmentId = embeddedDepartmentId || activeDepartment?.id;
 
@@ -528,10 +529,14 @@ export default function Records({ embeddedPerson = null, embeddedDepartmentId = 
         newButton: 'New Incident Report',
         newModalTitle: 'New Fire Incident Report',
         editModalTitle: 'Edit Incident Report',
-        searchPlaceholder: 'Search person by first or last name...',
-        noRecords: 'No fire incident reports found for this person',
+        searchPlaceholder: 'Search occupant / contact by first or last name...',
+        noRecords: 'No fire incident reports linked to this contact / occupant',
         countNoun: 'report(s)',
       };
+
+  const personAnchorLabel = isFire ? 'Reporting Contact / Occupant' : 'Person';
+  const findPersonButtonLabel = isFire ? 'Find Contact / Occupant' : 'Find Person';
+  const createSubmitLabel = isLaw ? 'Create Record' : isParamedics ? 'Create Patient Report' : 'Create Incident Report';
 
   const [personQuery, setPersonQuery] = useState('');
   const [personMatches, setPersonMatches] = useState([]);
@@ -695,7 +700,7 @@ export default function Records({ embeddedPerson = null, embeddedDepartmentId = 
   async function createRecord(e) {
     e.preventDefault();
     if (!selectedPerson) {
-      alert('Select a person first');
+      alert(isFire ? 'Select a reporting contact or occupant first' : 'Select a person first');
       return;
     }
     setCreatingRecord(true);
@@ -891,6 +896,13 @@ export default function Records({ embeddedPerson = null, embeddedDepartmentId = 
 
       {!isEmbedded && (
         <div className="bg-cad-card border border-cad-border rounded-2xl p-4 mb-6">
+          {isFire && (
+            <div className="mb-3 rounded-lg border border-cad-border bg-cad-surface px-3 py-2">
+              <p className="text-xs text-cad-muted">
+                Fire incident reports are currently linked to a person record (occupant, owner, or reporting contact) for searchability until incident linking is fully implemented.
+              </p>
+            </div>
+          )}
           <form onSubmit={searchPeople} className="flex flex-col md:flex-row gap-3">
             <input
               type="text"
@@ -904,7 +916,7 @@ export default function Records({ embeddedPerson = null, embeddedDepartmentId = 
               disabled={lookingUpPersons || personQuery.trim().length < 2}
               className="px-6 py-2 bg-cad-accent hover:bg-cad-accent-light text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
             >
-              {lookingUpPersons ? 'Searching...' : 'Find Person'}
+              {lookingUpPersons ? 'Searching...' : findPersonButtonLabel}
             </button>
           </form>
 
@@ -926,7 +938,8 @@ export default function Records({ embeddedPerson = null, embeddedDepartmentId = 
           {selectedPerson && (
             <div className="mt-3 flex items-center justify-between gap-2 text-sm text-cad-muted">
               <div>
-                Selected: <span className="text-cad-ink font-medium">{selectedPerson.firstname} {selectedPerson.lastname}</span>
+                {isFire ? 'Selected Contact / Occupant:' : 'Selected:'}{' '}
+                <span className="text-cad-ink font-medium">{selectedPerson.firstname} {selectedPerson.lastname}</span>
               </div>
               <button
                 type="button"
@@ -949,7 +962,7 @@ export default function Records({ embeddedPerson = null, embeddedDepartmentId = 
 
       {isEmbedded && selectedPerson && (
         <div className="mb-3 text-sm text-cad-muted">
-          Managing records for{' '}
+          {isFire ? 'Managing incident reports linked to ' : 'Managing records for '}
           <span className="text-cad-ink font-medium">
             {selectedPerson.firstname} {selectedPerson.lastname}
           </span>
@@ -958,14 +971,16 @@ export default function Records({ embeddedPerson = null, embeddedDepartmentId = 
 
       {isEmbedded && !selectedPerson && (
         <p className="text-sm text-cad-muted py-3">
-          Search and select a person to manage their records.
+          {isFire
+            ? 'Search and select a reporting contact or occupant to manage linked incident reports.'
+            : 'Search and select a person to manage their records.'}
         </p>
       )}
 
       {records.length > 0 && (
         <div className="space-y-3">
           <div className="text-sm text-cad-muted">
-            {records.length} {pageCopy.countNoun} for {selectedPerson?.firstname} {selectedPerson?.lastname}
+            {records.length} {pageCopy.countNoun} {isFire ? 'linked to' : 'for'} {selectedPerson?.firstname} {selectedPerson?.lastname}
           </div>
           {records.map(r => {
             const medical = parseMedicalRecord(r);
@@ -1101,14 +1116,14 @@ export default function Records({ embeddedPerson = null, embeddedDepartmentId = 
       <Modal open={showNew} onClose={() => setShowNew(false)} title={pageCopy.newModalTitle}>
         <form onSubmit={createRecord} className="space-y-3">
           <div>
-            <label className="block text-sm text-cad-muted mb-1">Person *</label>
+            <label className="block text-sm text-cad-muted mb-1">{personAnchorLabel} *</label>
             <input
               type="text"
               required
               value={`${selectedPerson?.firstname || ''} ${selectedPerson?.lastname || ''}`.trim()}
               readOnly
               className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm text-cad-ink"
-              placeholder="Select a person from lookup"
+              placeholder={isFire ? 'Select a reporting contact or occupant from lookup' : 'Select a person from lookup'}
             />
           </div>
           {isLaw ? (
@@ -1171,7 +1186,7 @@ export default function Records({ embeddedPerson = null, embeddedDepartmentId = 
               }
               className="flex-1 px-4 py-2 bg-cad-accent hover:bg-cad-accent-light text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
             >
-              {creatingRecord ? 'Creating...' : 'Create Record'}
+              {creatingRecord ? 'Creating...' : createSubmitLabel}
             </button>
             <button
               type="button"

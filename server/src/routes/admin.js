@@ -18,6 +18,7 @@ const {
   getStatus: getFiveMResourceStatus,
   startFiveMResourceAutoSync,
 } = require('../services/fivemResourceManager');
+const { sendTestWarrantCommunityPoster } = require('../utils/warrantCommunityPoster');
 
 const router = express.Router();
 router.use(requireAuth, requireAdmin);
@@ -689,6 +690,22 @@ router.put('/settings', (req, res) => {
   startFiveMResourceAutoSync();
   audit(req.user.id, 'settings_updated', { keys: Object.keys(settings) });
   res.json(Settings.getAll());
+});
+
+router.post('/warrant-community-webhook/test', async (req, res) => {
+  try {
+    const result = await sendTestWarrantCommunityPoster();
+    if (result?.skipped) {
+      return res.status(400).json({ error: 'Webhook not configured in CAD settings', result });
+    }
+    audit(req.user.id, 'warrant_community_webhook_test_sent', {
+      configured: true,
+      location: String(result?.location || ''),
+    });
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to send test webhook', message: err.message });
+  }
 });
 
 // --- FiveM resource management ---

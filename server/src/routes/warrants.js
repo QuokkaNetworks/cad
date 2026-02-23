@@ -3,6 +3,7 @@ const { requireAuth } = require('../auth/middleware');
 const { Warrants } = require('../db/sqlite');
 const { audit } = require('../utils/audit');
 const bus = require('../utils/eventBus');
+const { notifyWarrantCommunityPoster } = require('../utils/warrantCommunityPoster');
 
 const router = express.Router();
 
@@ -48,6 +49,14 @@ router.post('/', requireAuth, (req, res) => {
     title,
   });
   bus.emit('warrant:create', { departmentId: deptId, warrant });
+
+  // Community wanted-post notifications are best-effort only and should never block warrant creation.
+  setImmediate(() => {
+    notifyWarrantCommunityPoster(warrant).catch((err) => {
+      console.warn(`[Warrants] Community wanted notification failed for warrant #${warrant.id}: ${err?.message || err}`);
+    });
+  });
+
   res.status(201).json(warrant);
 });
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../auth/middleware');
-const { Units, Departments, SubDepartments, Users, FiveMPlayerLinks, Calls } = require('../db/sqlite');
+const { Units, Departments, SubDepartments, Users, FiveMPlayerLinks, Calls, AuditLog } = require('../db/sqlite');
 const { audit } = require('../utils/audit');
 const bus = require('../utils/eventBus');
 
@@ -34,6 +34,21 @@ function getEditableUnitStatuses() {
   return new Set(['available', 'busy', 'enroute', 'on-scene', 'unavailable']);
 }
 
+const OFF_DUTY_SUMMARY_AUDIT_ACTIONS = [
+  'call_created',
+  'call_unit_assigned',
+  'call_unit_unassigned',
+  'record_created',
+  'traffic_stop_created',
+  'shift_note_created',
+  'warrant_created',
+  'bolo_created',
+  'patient_analysis_created',
+  'patient_analysis_updated',
+  'pursuit_outcome_logged',
+  'evidence_created',
+];
+
 function emitRouteClearOnAvailable(unit, statusValue) {
   const normalizedStatus = normalizeUnitStatus(statusValue);
   if (normalizedStatus !== 'available') return;
@@ -45,6 +60,62 @@ function emitRouteClearOnAvailable(unit, statusValue) {
     unit,
     call: activeCall || null,
   });
+}
+
+function buildOffDutySummaryForUnit(user, unit) {
+  if (!user || !unit) return null;
+
+  const now = new Date();
+  const nowSql = now.toISOString().replace('T', ' ').slice(0, 19);
+  const startedAtSql = String(unit.created_at || '').trim() || null;
+  const startedAtMs = parseSqliteUtc(startedAtSql);
+  const durationSeconds = Number.isFinite(startedAtMs)
+    ? Math.max(0, Math.round((Date.now() - startedAtMs) / 1000))
+    : null;
+
+  const department = Departments.findById(Number(unit.department_id));
+  const activeCall = Calls.getAssignedCallForUnit(unit.id);
+  const auditCounts = AuditLog.countByUserActionsSince(user.id, {
+    since: startedAtSql || null,
+    actions: OFF_DUTY_SUMMARY_AUDIT_ACTIONS,
+  });
+
+  return {
+    unit: {
+      id: Number(unit.id),
+      callsign: String(unit.callsign || '').trim(),
+      status: String(unit.status || '').trim().toLowerCase(),
+      department_id: Number(unit.department_id || 0) || null,
+      department_name: String(department?.name || '').trim(),
+      department_short_name: String(department?.short_name || '').trim(),
+      sub_department_name: String(unit?.sub_department_name || '').trim(),
+      sub_department_short_name: String(unit?.sub_department_short_name || '').trim(),
+    },
+    shift_started_at: startedAtSql,
+    shift_ended_at: nowSql,
+    duration_seconds: Number.isFinite(durationSeconds) ? durationSeconds : null,
+    active_call_at_signoff: activeCall ? {
+      id: Number(activeCall.id),
+      title: String(activeCall.title || '').trim(),
+      priority: String(activeCall.priority || '').trim(),
+      location: String(activeCall.location || '').trim(),
+      status: String(activeCall.status || '').trim().toLowerCase(),
+    } : null,
+    stats: {
+      calls_created: Number(auditCounts.call_created || 0),
+      call_assignments: Number(auditCounts.call_unit_assigned || 0),
+      call_unassignments: Number(auditCounts.call_unit_unassigned || 0),
+      records_created: Number(auditCounts.record_created || 0),
+      traffic_stops_created: Number(auditCounts.traffic_stop_created || 0),
+      shift_notes_created: Number(auditCounts.shift_note_created || 0),
+      warrants_created: Number(auditCounts.warrant_created || 0),
+      bolos_created: Number(auditCounts.bolo_created || 0),
+      patient_analyses_created: Number(auditCounts.patient_analysis_created || 0),
+      patient_analyses_updated: Number(auditCounts.patient_analysis_updated || 0),
+      pursuit_outcomes_logged: Number(auditCounts.pursuit_outcome_logged || 0),
+      evidence_created: Number(auditCounts.evidence_created || 0),
+    },
+  };
 }
 
 function canDispatchManageUnit(user, unit) {
@@ -373,11 +444,12 @@ router.delete('/me', requireAuth, (req, res) => {
   if (!unit) return res.status(404).json({ error: 'Not on duty' });
 
   const deptId = unit.department_id;
+  const summary = buildOffDutySummaryForUnit(req.user, unit);
   Units.remove(unit.id);
 
   audit(req.user.id, 'unit_off_duty', { callsign: unit.callsign });
   bus.emit('unit:offline', { departmentId: deptId, unit });
-  res.json({ success: true });
+  res.json({ success: true, summary });
 });
 
 module.exports = router;

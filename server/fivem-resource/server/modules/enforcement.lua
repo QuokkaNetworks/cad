@@ -143,6 +143,122 @@ RegisterCommand('ts', function(src, args)
   submitTrafficStopCommand(src, args, 'ts')
 end, false)
 
+local DISCORD_JOB_ROLE_SYNC_BRIDGE_BACKOFF_SCOPE = 'discord_job_role_sync'
+local lastDiscordJobRoleSyncAtMsBySource = {}
+local lastDiscordJobRoleSyncSignatureBySource = {}
+
+local function normalizeJobGradeValue(value)
+  if type(value) == 'table' then
+    value = value.level or value.grade or value.value or value.rank
+  end
+  local numeric = tonumber(value)
+  if not numeric then return 0 end
+  return math.max(0, math.floor(numeric))
+end
+
+local function extractJobNameAndGrade(jobData)
+  if type(jobData) ~= 'table' then
+    return '', 0
+  end
+
+  local jobName = trim(jobData.name or jobData.job or jobData.id or jobData.label or '')
+  local jobGrade = normalizeJobGradeValue(jobData.grade)
+  if jobData.grade == nil then
+    if jobData.grade_level ~= nil then
+      jobGrade = normalizeJobGradeValue(jobData.grade_level)
+    elseif jobData.rank ~= nil then
+      jobGrade = normalizeJobGradeValue(jobData.rank)
+    end
+  end
+
+  return jobName, jobGrade
+end
+
+local function notifyDiscordJobRoleSyncForSource(sourceId, jobData, triggerName)
+  local src = tonumber(sourceId) or 0
+  if src <= 0 and type(jobData) == 'table' then
+    src = tonumber(jobData.source or jobData.source_id or jobData.src or jobData.playerId or jobData.player_id) or 0
+  end
+  if src <= 0 then return end
+  if not GetPlayerName(src) then return end
+  if not hasBridgeConfig() then return end
+  if isBridgeBackoffActive(DISCORD_JOB_ROLE_SYNC_BRIDGE_BACKOFF_SCOPE) then return end
+
+  local citizenId = trim(getCitizenId(src) or '')
+  if citizenId == '' then return end
+
+  local jobName, jobGrade = extractJobNameAndGrade(jobData)
+  local signature = table.concat({
+    tostring(src),
+    citizenId,
+    trim(jobName):lower(),
+    tostring(jobGrade),
+    trim(triggerName or 'job_update'):lower(),
+  }, '|')
+  local now = nowMs()
+  local lastAt = tonumber(lastDiscordJobRoleSyncAtMsBySource[src] or 0) or 0
+  local lastSig = tostring(lastDiscordJobRoleSyncSignatureBySource[src] or '')
+  if signature == lastSig and (now - lastAt) < 1500 then
+    return
+  end
+  lastDiscordJobRoleSyncAtMsBySource[src] = now
+  lastDiscordJobRoleSyncSignatureBySource[src] = signature
+
+  local characterName = trim(getCharacterDisplayName(src) or '')
+  local platformName = trim(GetPlayerName(src) or '')
+  local payload = {
+    source = src,
+    identifiers = GetPlayerIdentifiers(src),
+    citizenid = citizenId,
+    player_name = characterName ~= '' and characterName or platformName,
+    platform_name = platformName,
+    character_name = characterName,
+    job_name = jobName,
+    job_grade = jobGrade,
+    trigger = trim(triggerName or 'job_update'),
+  }
+
+  request('POST', '/api/integration/fivem/discord/job-role-sync', payload, function(status, body, responseHeaders)
+    if status == 429 then
+      setBridgeBackoff(DISCORD_JOB_ROLE_SYNC_BRIDGE_BACKOFF_SCOPE, responseHeaders, 10000, 'discord job role sync')
+      return
+    end
+    if status == 0 then
+      setBridgeBackoff(DISCORD_JOB_ROLE_SYNC_BRIDGE_BACKOFF_SCOPE, responseHeaders, 3000, 'discord job role sync transport')
+      return
+    end
+    if status >= 500 then
+      setBridgeBackoff(DISCORD_JOB_ROLE_SYNC_BRIDGE_BACKOFF_SCOPE, responseHeaders, 5000, 'discord job role sync server error')
+      return
+    end
+
+    if status >= 400 then
+      local okDecode, parsed = pcall(json.decode, body or '{}')
+      local errSuffix = ''
+      if okDecode and type(parsed) == 'table' and parsed.error then
+        errSuffix = ': ' .. tostring(parsed.error)
+      end
+      print(('[cad_bridge] discord job role sync trigger failed (HTTP %s)%s'):format(tostring(status), errSuffix))
+    end
+  end)
+end
+
+RegisterNetEvent('cad_bridge:syncDiscordJobRoles', function(jobData, triggerName)
+  notifyDiscordJobRoleSyncForSource(source, jobData, triggerName or 'manual_event')
+end)
+
+AddEventHandler('QBCore:Server:OnJobUpdate', function(jobData)
+  notifyDiscordJobRoleSyncForSource(source, jobData, 'qbcore_job_update')
+end)
+
+AddEventHandler('qbx_core:server:onJobUpdate', function(jobData)
+  notifyDiscordJobRoleSyncForSource(source, jobData, 'qbx_job_update')
+end)
+
+AddEventHandler('qbx_core:server:jobUpdated', function(jobData)
+  notifyDiscordJobRoleSyncForSource(source, jobData, 'qbx_job_updated')
+end)
+
 local heartbeatInFlight = false
 local heartbeatInFlightSinceMs = 0
 local pollFineJobs = nil
@@ -2313,4 +2429,6 @@ AddEventHandler('playerDropped', function()
   wraithEmergencyPlateCacheByPlate = {}
   autoAmbulanceCallStateBySource[src] = nil
   activeCallPromptBySource[src] = nil
+  lastDiscordJobRoleSyncAtMsBySource[src] = nil
+  lastDiscordJobRoleSyncSignatureBySource[src] = nil
 end)

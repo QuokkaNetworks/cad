@@ -20,6 +20,12 @@ const ADMIN_ITEMS = [
     color: 'bg-[#5865F2]',
   },
   {
+    to: '/admin/job-bindings',
+    title: 'Job Role Sync',
+    description: 'Bind QBox player_groups job + grade values to Discord roles.',
+    color: 'bg-indigo-500',
+  },
+  {
     to: '/admin/offences',
     title: 'Offence Catalog',
     description: 'Manage preset Infringements, Summary, and Indictment entries.',
