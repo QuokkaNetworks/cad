@@ -295,23 +295,31 @@ function getCustomTemplatePath() {
   return resolved;
 }
 
+function getBundledTemplatePath() {
+  return path.resolve(__dirname, '../../assets/warrant-posters/crimestopperswantedposter.jpg');
+}
+
 function getCustomTemplateUrl() {
   const fromSettings = String(Settings.get('discord_warrant_community_poster_template_url') || '').trim();
   return isHttpUrl(fromSettings) ? fromSettings : '';
 }
 
 async function loadCustomTemplateBuffer() {
-  const customTemplatePath = getCustomTemplatePath();
-  if (customTemplatePath) {
-    if (fs.existsSync(customTemplatePath)) {
+  const localPathCandidates = [
+    getCustomTemplatePath(),
+    getBundledTemplatePath(),
+  ].filter(Boolean);
+
+  for (const templatePath of localPathCandidates) {
+    if (fs.existsSync(templatePath)) {
       try {
-        const buffer = await fsp.readFile(customTemplatePath);
-        return { buffer, source: customTemplatePath, kind: 'path' };
+        const buffer = await fsp.readFile(templatePath);
+        return { buffer, source: templatePath, kind: 'path' };
       } catch (err) {
         console.warn(`[WarrantPoster] Failed to read template image: ${err?.message || err}`);
       }
-    } else {
-      console.warn(`[WarrantPoster] Template path not found: ${customTemplatePath}`);
+    } else if (templatePath === localPathCandidates[0] && templatePath !== getBundledTemplatePath()) {
+      console.warn(`[WarrantPoster] Template path not found: ${templatePath}`);
     }
   }
 
