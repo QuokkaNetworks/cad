@@ -135,6 +135,12 @@ router.delete('/:id', requireAuth, (req, res) => {
     entity_id: evidence.entity_id,
     title: evidence.title,
   });
+  bus.emit('evidence:delete', {
+    departmentId: evidence.department_id || null,
+    evidence_id: evidenceId,
+    entity_type: evidence.entity_type,
+    entity_id: evidence.entity_id,
+  });
   res.json({ success: true });
 });
 

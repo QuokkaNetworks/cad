@@ -112,6 +112,10 @@ export default function EvidenceManagement() {
       if (Number(payload?.departmentId || payload?.department_id || 0) !== Number(deptId || 0)) return;
       loadEvidenceList();
     },
+    'evidence:delete': (payload) => {
+      if (Number(payload?.departmentId || payload?.department_id || 0) !== Number(deptId || 0)) return;
+      loadEvidenceList();
+    },
   });
 
   function submitFilters(event) {

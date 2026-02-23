@@ -75,6 +75,7 @@ router.get('/', (req, res) => {
     'warrant:create', 'warrant:serve', 'warrant:cancel',
     'trafficstop:create',
     'evidence:create',
+    'evidence:delete',
     'shiftnote:create',
     'pursuit:update',
     'pursuit:outcome_create',

@@ -13,7 +13,7 @@ const LAW_NAV = [
   { to: '/warrants', label: 'Warrants', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
   { to: '/bolos', label: 'BOLOs', icon: 'M3 10h18M5 6h14M7 14h10M9 18h6' },
   { to: '/evidence', label: 'Evidence', icon: 'M9 3h6l1 2h3a1 1 0 011 1v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6a1 1 0 011-1h3l1-2z' },
-  { to: '/units', label: 'Dispatch', icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100-8 4 4 0 000 8zm11 4l-4.35 4.35M17 11h4m-2-2v4' },
+  { to: '/units', label: 'Units', icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100-8 4 4 0 000 8zm11 4l-4.35 4.35M17 11h4m-2-2v4' },
 ];
 
 const EMS_NAV = [
@@ -34,13 +34,20 @@ const FIRE_NAV = [
   { to: '/fire-preplans', label: 'Pre-Plans', icon: 'M9 20l-5.447-2.724A1 1 0 013 16.382V5a2 2 0 012-2h10a2 2 0 012 2v11.382a1 1 0 01-.553.894L11 20m0 0V4' },
 ];
 
+const DISPATCH_NAV = [
+  { to: '/department', label: 'Home', icon: 'M3 12l9-9 9 9M4 10v10h5v-6h6v6h5V10' },
+  { to: '/dispatch', label: 'Dispatch', icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100-8 4 4 0 000 8zm11 4l-4.35 4.35M17 11h4m-2-2v4' },
+  { to: '/search', label: 'Search', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
+];
+
 const CALL_DETAILS_NAV_ITEM = {
   to: '/call-details',
   label: 'Call Details',
   icon: 'M9 12h6m-6 4h6M8 2h8a2 2 0 012 2v16l-6-3-6 3V4a2 2 0 012-2z',
 };
 
-function getNavItemsForLayout(layoutType) {
+function getNavItemsForLayout(layoutType, activeDepartment) {
+  if (activeDepartment?.is_dispatch) return DISPATCH_NAV;
   if (layoutType === DEPARTMENT_LAYOUT.PARAMEDICS) return EMS_NAV;
   if (layoutType === DEPARTMENT_LAYOUT.FIRE) return FIRE_NAV;
   return LAW_NAV;
@@ -279,17 +286,9 @@ export default function Sidebar() {
     },
   });
 
-  const hideUnitsTab = !!(activeDepartment && !isDispatchDepartment && dispatcherOnline);
-  const baseNavItems = getNavItemsForLayout(layoutType);
-  const departmentNavItems = activeDepartment?.is_dispatch
-    ? baseNavItems.map(item => (item.to === '/units'
-      ? { ...item, to: '/dispatch' }
-      : item))
-    : baseNavItems;
-  const navItems = departmentNavItems.filter((item) => {
+  const navItems = getNavItemsForLayout(layoutType, activeDepartment).filter((item) => {
     const isDispatchTab = item.to === '/units' || item.to === '/dispatch';
     if (!isOnDuty && isDispatchTab) return false;
-    if (hideUnitsTab && item.to === '/units') return false;
     return true;
   });
 

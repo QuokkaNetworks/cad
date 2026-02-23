@@ -60,6 +60,21 @@ export default function EvidencePanel({
       if (Number(payload?.entity_id) !== numericEntityId) return;
       loadEvidence();
     },
+    'evidence:delete': (payload) => {
+      if (!canLoad) return;
+      if (String(payload?.entity_type || '').trim().toLowerCase() !== normalizedEntityType) return;
+      if (Number(payload?.entity_id) !== numericEntityId) return;
+      const deletedId = Number(payload?.evidence_id || 0);
+      if (Number.isInteger(deletedId) && deletedId > 0) {
+        setItems((current) => (
+          Array.isArray(current)
+            ? current.filter((item) => Number(item?.id) !== deletedId)
+            : []
+        ));
+        return;
+      }
+      loadEvidence();
+    },
   });
 
   async function createEvidence(e) {
