@@ -480,6 +480,7 @@ local autoAmbulanceCallStateBySource = {}
 local autoAmbulanceDeathSnapshotBySource = {}
 local lastAutoAmbulanceMissingResourceLogAtMs = 0
 local lastAutoAmbulanceSnapshotLogAtMs = 0
+local lastAutoAmbulanceNoParamedicsLogAtMs = 0
 local AUTO_AMBULANCE_DEATH_STATE_STALE_MS = 30000
 
 local function toBoolean(value)
@@ -690,6 +691,20 @@ local function submitAutoAmbulanceCall(sourceId, onResult)
 
     if status == 429 then
       setBridgeBackoff('calls', responseHeaders, 15000, 'auto ambulance call')
+    end
+
+    if status == 409 then
+      local okParsed, parsed = pcall(json.decode, body or '{}')
+      local code = trim(okParsed and type(parsed) == 'table' and parsed.code or '')
+      if code == 'no_paramedics_online' then
+        local now = nowMs()
+        if (now - lastAutoAmbulanceNoParamedicsLogAtMs) >= 60000 then
+          lastAutoAmbulanceNoParamedicsLogAtMs = now
+          print('[cad_bridge] Auto ambulance call skipped: no on-duty paramedic units online')
+        end
+        finish(false, status, body)
+        return
+      end
     end
 
     local err = ('Auto ambulance call failed (HTTP %s)'):format(tostring(status))

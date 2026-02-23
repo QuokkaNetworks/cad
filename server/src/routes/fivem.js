@@ -1112,6 +1112,26 @@ function normalizeDepartmentLayoutType(value) {
   return '';
 }
 
+function countOnDutyUnitsByDepartmentLayoutType(layoutType) {
+  const normalizedLayoutType = normalizeDepartmentLayoutType(layoutType);
+  if (!normalizedLayoutType) return 0;
+
+  const departmentById = new Map(
+    Departments.list()
+      .filter((dept) => dept && dept.is_active && !dept.is_dispatch)
+      .map((dept) => [Number(dept.id), dept])
+  );
+
+  let count = 0;
+  for (const unit of Units.list()) {
+    const dept = departmentById.get(Number(unit?.department_id || 0));
+    if (!dept) continue;
+    if (normalizeDepartmentLayoutType(dept.layout_type) !== normalizedLayoutType) continue;
+    count += 1;
+  }
+  return count;
+}
+
 function normalizeAlarmZoneDepartmentRef(value) {
   if (value === undefined || value === null || value === '') return null;
   const parsed = Number(value);
@@ -2665,6 +2685,18 @@ router.post('/calls', requireBridgeAuth, (req, res) => {
     payload.requested_department_layout_type || payload.department_layout_type || payload.layout_type
   );
   const details = String(payload.message || payload.details || '').trim();
+
+  if (sourceType === 'auto_medical_down') {
+    const onlineParamedics = countOnDutyUnitsByDepartmentLayoutType('paramedics');
+    if (onlineParamedics <= 0) {
+      return res.status(409).json({
+        error: 'No on-duty paramedic units online',
+        code: 'no_paramedics_online',
+        layout_type: 'paramedics',
+        online_count: 0,
+      });
+    }
+  }
 
   let cadUser = resolveCadUserFromIdentifiers(ids);
   if (!cadUser && ids.linkKey) {
