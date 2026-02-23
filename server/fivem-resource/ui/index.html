@@ -167,6 +167,44 @@
       </section>
     </div>
 
+    <div id="jailReleaseOverlay" class="overlay hidden" aria-hidden="true">
+      <section class="panel panel-jail-release" role="dialog" aria-modal="true" aria-labelledby="jailRelease-title">
+        <header class="panel-header">
+          <div class="eyebrow">CAD Jail Release</div>
+          <button id="jailReleaseCloseBtn" class="icon-btn" type="button" aria-label="Close">x</button>
+        </header>
+
+        <h1 id="jailRelease-title">You've Served Your Sentence</h1>
+        <p class="subtitle">
+          Select a release point to be teleported out of custody.
+        </p>
+
+        <form id="jailReleaseForm" class="form" novalidate>
+          <div class="inline-grid two-col">
+            <div class="field">
+              <label for="jailReleaseSentenceInput">Sentence</label>
+              <input id="jailReleaseSentenceInput" type="text" readonly />
+            </div>
+            <div class="field">
+              <label for="jailReleaseSelect">Release Point <span class="required">*</span></label>
+              <select id="jailReleaseSelect" required></select>
+              <div id="jailReleaseSelectError" class="error hidden"></div>
+            </div>
+          </div>
+
+          <div id="jailReleaseReasonField" class="field hidden">
+            <label>Sentence Reason</label>
+            <p id="jailReleaseReasonText" class="inline-note"></p>
+          </div>
+
+          <footer class="actions">
+            <button id="jailReleaseCancelBtn" class="btn btn-ghost" type="button">Close</button>
+            <button id="jailReleaseSubmitBtn" class="btn btn-primary" type="submit">Release Me</button>
+          </footer>
+        </form>
+      </section>
+    </div>
+
     <div id="licenseOverlay" class="overlay hidden" aria-hidden="true">
       <section class="panel panel-license" role="dialog" aria-modal="true" aria-labelledby="license-title">
         <header class="panel-header">

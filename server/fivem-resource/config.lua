@@ -218,6 +218,51 @@ local function parseVec4String(rawValue, fallback)
   }
 end
 
+local function normalizeVec4List(value, fallback)
+  local out = {}
+  if type(value) == 'table' then
+    for _, entry in ipairs(value) do
+      if type(entry) == 'table' then
+        local x = tonumber(entry.x or entry[1])
+        local y = tonumber(entry.y or entry[2])
+        local z = tonumber(entry.z or entry[3])
+        local w = tonumber(entry.w or entry.h or entry.heading or entry[4]) or 0.0
+        if x and y and z then
+          out[#out + 1] = {
+            x = x + 0.0,
+            y = y + 0.0,
+            z = z + 0.0,
+            w = w + 0.0,
+            label = trim(entry.label or entry.name or ''),
+            description = trim(entry.description or ''),
+            emote = trim(entry.emote or ''),
+          }
+        end
+      end
+    end
+  end
+
+  if #out > 0 then return out end
+
+  local fallbackOut = {}
+  if type(fallback) == 'table' then
+    for _, entry in ipairs(fallback) do
+      if type(entry) == 'table' then
+        fallbackOut[#fallbackOut + 1] = {
+          x = tonumber(entry.x) or 0.0,
+          y = tonumber(entry.y) or 0.0,
+          z = tonumber(entry.z) or 0.0,
+          w = tonumber(entry.w) or 0.0,
+          label = trim(entry.label or entry.name or ''),
+          description = trim(entry.description or ''),
+          emote = trim(entry.emote or ''),
+        }
+      end
+    end
+  end
+  return fallbackOut
+end
+
 local function parseVec3String(rawValue, fallback)
   if type(fallback) ~= 'table' then
     fallback = { x = 0.0, y = 0.0, z = 0.0 }
@@ -345,6 +390,44 @@ local DEFAULT_WRAITH_SEATBELT_IGNORED_VEHICLE_CODES = {
   'pumpertanker',
   'hinorescue',
   'scaniahp',
+}
+local DEFAULT_CAD_JAIL_SPAWN_POINTS = {
+  { x = 1770.7249755859, y = 2479.9802246094, z = 45.74076461792, w = 31.66007232666, label = 'Yard A', emote = 'pushup' },
+  { x = 1761.0710449219, y = 2474.9235839844, z = 49.693054199219, w = 33.123195648193, label = 'Cell Block Upper', emote = 'pushup' },
+  { x = 1745.0281982422, y = 2479.2116699219, z = 45.740684509277, w = 323.06579589844, label = 'Weights Yard', emote = 'weights' },
+  { x = 1768.1342773438, y = 2481.6772460938, z = 45.740734100342, w = 33.281074523926, label = 'Yard Wall', emote = 'lean' },
+}
+local DEFAULT_CAD_JAIL_RELEASE_POINTS = {
+  {
+    label = 'Bolingbroke Main Gate',
+    description = 'Prison main release gate',
+    x = 1850.7,
+    y = 2585.69,
+    z = 44.67,
+    w = 270.25,
+  },
+}
+local DEFAULT_CAD_JAIL_PRISON_OUTFITS = {
+  male = {
+    accessories = { item = 0, texture = 0 },
+    mask = { item = 0, texture = 0 },
+    pants = { item = 5, texture = 7 },
+    jacket = { item = 0, texture = 0 },
+    shirt = { item = 15, texture = 0 },
+    arms = { item = 0, texture = 0 },
+    shoes = { item = 42, texture = 2 },
+    bodyArmor = { item = 0, texture = 0 },
+  },
+  female = {
+    accessories = { item = 0, texture = 0 },
+    mask = { item = 0, texture = 0 },
+    pants = { item = 0, texture = 0 },
+    jacket = { item = 0, texture = 0 },
+    shirt = { item = 0, texture = 0 },
+    arms = { item = 0, texture = 0 },
+    shoes = { item = 0, texture = 0 },
+    bodyArmor = { item = 0, texture = 0 },
+  },
 }
 
 -- CAD bridge endpoint/token.
@@ -484,9 +567,44 @@ Config.JobSyncAdapter = trim(getString('cad_bridge_job_sync_adapter', 'none'))
 if Config.JobSyncAdapter == '' then Config.JobSyncAdapter = 'none' end
 Config.JobSyncCommandTemplate = getString('cad_bridge_job_sync_command', 'qbx_setjob {source} {job} {grade}')
 
-Config.JailAdapter = trim(getString('cad_bridge_jail_adapter', 'xt-prison'))
-if Config.JailAdapter == '' then Config.JailAdapter = 'xt-prison' end
+Config.JailAdapter = trim(getString('cad_bridge_jail_adapter', 'cad_bridge'))
+if Config.JailAdapter == '' then Config.JailAdapter = 'cad_bridge' end
 Config.JailCommandTemplate = getString('cad_bridge_jail_command', 'jail {source} {minutes} {reason}')
+Config.CadBridgeJailSpawnPoints = normalizeVec4List(getJsonTable('cad_bridge_jail_spawn_points_json'), DEFAULT_CAD_JAIL_SPAWN_POINTS)
+Config.CadBridgeJailReleasePoints = normalizeVec4List(getJsonTable('cad_bridge_jail_release_points_json'), DEFAULT_CAD_JAIL_RELEASE_POINTS)
+Config.CadBridgeEnablePrisonOutfits = getBoolean('cad_bridge_jail_enable_prison_outfits', true)
+Config.CadBridgePrisonOutfits = DEFAULT_CAD_JAIL_PRISON_OUTFITS
+Config.CadBridgeJailPlaySound = function()
+  local ped = PlayerPedId and PlayerPedId() or 0
+  if not ped or ped == 0 then return end
+  local ok, _ = pcall(function()
+    if GetResourceState('qbx_core') == 'started' and type(lib) == 'table' and type(lib.load) == 'function' then
+      lib.load('@qbx_core.modules.lib')
+      if type(qbx) == 'table' and type(qbx.loadAudioBank) == 'function' and type(qbx.playAudio) == 'function' then
+        qbx.loadAudioBank('audiodirectory/jail_sounds')
+        qbx.playAudio({
+          audioName = 'jail',
+          audioRef = 'jail_soundset',
+          source = ped,
+        })
+        ReleaseNamedScriptAudioBank('audiodirectory/jail_sounds')
+        return
+      end
+    end
+    RequestScriptAudioBank('audiodirectory/jail_sounds', false)
+    PlaySoundFromEntity(GetSoundId(), 'jail', ped, 'jail_soundset', false, false)
+    ReleaseNamedScriptAudioBank('audiodirectory/jail_sounds')
+  end)
+end
+Config.CadBridgeJailResetClothing = function()
+  if GetResourceState('illenium-appearance') == 'started' then
+    TriggerEvent('illenium-appearance:client:reloadSkin', true)
+    return
+  end
+  if GetResourceState('qb-clothing') == 'started' then
+    TriggerServerEvent('qb-clothes:loadPlayerSkin')
+  end
+end
 
 -- Wraith integration.
 Config.WraithCadLookupEnabled = getBoolean('cad_bridge_wraith_lookup_enabled', true)

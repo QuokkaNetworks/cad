@@ -30,6 +30,17 @@ var trafficStopOutcomeCounter = document.getElementById("trafficStopOutcomeCount
 var trafficStopNotesCounter = document.getElementById("trafficStopNotesCounter");
 var trafficStopReasonError = document.getElementById("trafficStopReasonError");
 
+var jailReleaseOverlay = document.getElementById("jailReleaseOverlay");
+var jailReleaseForm = document.getElementById("jailReleaseForm");
+var jailReleaseCloseBtn = document.getElementById("jailReleaseCloseBtn");
+var jailReleaseCancelBtn = document.getElementById("jailReleaseCancelBtn");
+var jailReleaseSubmitBtn = document.getElementById("jailReleaseSubmitBtn");
+var jailReleaseSentenceInput = document.getElementById("jailReleaseSentenceInput");
+var jailReleaseSelect = document.getElementById("jailReleaseSelect");
+var jailReleaseSelectError = document.getElementById("jailReleaseSelectError");
+var jailReleaseReasonField = document.getElementById("jailReleaseReasonField");
+var jailReleaseReasonText = document.getElementById("jailReleaseReasonText");
+
 var licenseOverlay = document.getElementById("licenseOverlay");
 var licenseForm = document.getElementById("licenseForm");
 var licenseCloseBtn = document.getElementById("licenseCloseBtn");
@@ -78,6 +89,7 @@ var queuedIdCardPayload = null;
 
 var emergencyOpen = false;
 var trafficStopOpen = false;
+var jailReleaseOpen = false;
 var licenseOpen = false;
 var registrationOpen = false;
 var idCardOpen = false;
@@ -103,6 +115,7 @@ var durationOptions = [];
 var selectedRegistrationDurationDays = 35;
 var registrationSubmitPending = false;
 var trafficStopHiddenFields = { street: "", crossing: "", postal: "" };
+var jailReleaseOptions = [];
 
 function bindIdCardNodes() {
   idCardOverlay = document.getElementById("idCardOverlay");
@@ -284,12 +297,13 @@ function setVisible(node, visible) {
 }
 
 function anyModalOpen() {
-  return emergencyOpen || trafficStopOpen || licenseOpen || registrationOpen || idCardOpen;
+  return emergencyOpen || trafficStopOpen || jailReleaseOpen || licenseOpen || registrationOpen || idCardOpen;
 }
 
 function closeAll() {
   cancelEmergencyForm();
   cancelTrafficStopForm();
+  cancelJailReleaseForm();
   cancelLicenseForm();
   cancelRegistrationForm();
   if (idCardOpen) requestCloseIdCard();
@@ -606,6 +620,166 @@ function cancelTrafficStopForm() {
   if (!trafficStopOpen) return;
   postNui("cadBridgeTrafficStopCancel", {}).catch(function ignoreTrafficStopCancelError() {});
   closeTrafficStopForm();
+}
+
+function sanitizeJailReleaseOptions(raw) {
+  if (!Array.isArray(raw)) return [];
+  var out = [];
+  for (var i = 0; i < raw.length; i += 1) {
+    var item = raw[i] || {};
+    var label = String(safeGet(item, "label", "") || "").trim();
+    var description = String(safeGet(item, "description", "") || "").trim();
+    var id = String(safeGet(item, "id", safeGet(item, "value", String(i + 1))) || "").trim();
+    var index = Number(safeGet(item, "index", i + 1));
+    if (!label) label = "Release Point " + String(i + 1);
+    if (!id) id = String(i + 1);
+    if (!Number.isFinite(index) || index < 1) index = i + 1;
+    out.push({
+      id: id,
+      index: Math.floor(index),
+      label: label,
+      description: description,
+    });
+  }
+  return out;
+}
+
+function renderJailReleaseOptions(defaultOptionId) {
+  if (!jailReleaseSelect) return;
+  jailReleaseSelect.innerHTML = "";
+
+  if (!Array.isArray(jailReleaseOptions) || jailReleaseOptions.length === 0) {
+    var emptyOption = document.createElement("option");
+    emptyOption.value = "";
+    emptyOption.textContent = "No release points available";
+    jailReleaseSelect.appendChild(emptyOption);
+    jailReleaseSelect.disabled = true;
+    return;
+  }
+
+  jailReleaseSelect.disabled = false;
+  var selectedValue = "";
+  for (var i = 0; i < jailReleaseOptions.length; i += 1) {
+    var option = jailReleaseOptions[i];
+    var node = document.createElement("option");
+    node.value = String(option.id || "");
+    node.dataset.index = String(option.index || (i + 1));
+    node.textContent = option.description
+      ? (String(option.label || "") + " - " + String(option.description || ""))
+      : String(option.label || "");
+    jailReleaseSelect.appendChild(node);
+    if (!selectedValue && String(defaultOptionId || "") && String(defaultOptionId) === String(option.id)) {
+      selectedValue = node.value;
+    }
+  }
+  if (!selectedValue && jailReleaseOptions[0]) selectedValue = String(jailReleaseOptions[0].id || "");
+  jailReleaseSelect.value = selectedValue;
+}
+
+function resetJailReleaseForm(payload) {
+  var data = payload || {};
+  var sentenceMinutes = Math.max(0, Math.floor(Number(safeGet(data, "sentence_minutes", 0)) || 0));
+  var reason = String(safeGet(data, "reason", "") || "").trim();
+  jailReleaseOptions = sanitizeJailReleaseOptions(safeGet(data, "options", []));
+
+  if (jailReleaseSentenceInput) {
+    jailReleaseSentenceInput.value = sentenceMinutes > 0
+      ? (String(sentenceMinutes) + " minute(s)")
+      : "Sentence complete";
+  }
+
+  if (jailReleaseReasonText) {
+    jailReleaseReasonText.textContent = reason || "No reason provided.";
+  }
+  if (jailReleaseReasonField) {
+    if (reason) jailReleaseReasonField.classList.remove("hidden");
+    else jailReleaseReasonField.classList.add("hidden");
+  }
+
+  renderJailReleaseOptions(String(safeGet(data, "default_option_id", "") || ""));
+  showErrorNode(jailReleaseSelectError, "");
+  if (jailReleaseSubmitBtn) {
+    jailReleaseSubmitBtn.disabled = jailReleaseOptions.length === 0;
+    jailReleaseSubmitBtn.textContent = "Release Me";
+  }
+}
+
+function openJailReleaseForm(payload) {
+  if (emergencyOpen) closeEmergencyForm();
+  if (trafficStopOpen) closeTrafficStopForm();
+  if (licenseOpen) closeLicenseForm();
+  if (registrationOpen) closeRegistrationForm();
+  if (idCardOpen) requestCloseIdCard();
+
+  resetJailReleaseForm(payload || {});
+  jailReleaseOpen = true;
+  setVisible(jailReleaseOverlay, true);
+  setTimeout(function focusJailReleaseSelect() {
+    if (jailReleaseSelect && !jailReleaseSelect.disabled) jailReleaseSelect.focus();
+  }, 40);
+}
+
+function closeJailReleaseForm() {
+  jailReleaseOpen = false;
+  setVisible(jailReleaseOverlay, false);
+}
+
+async function submitJailReleaseForm() {
+  var selectedId = String(jailReleaseSelect && jailReleaseSelect.value || "").trim();
+  var selectedIndex = 0;
+  for (var i = 0; i < jailReleaseOptions.length; i += 1) {
+    if (String(jailReleaseOptions[i].id || "") === selectedId) {
+      selectedIndex = Number(jailReleaseOptions[i].index || 0);
+      break;
+    }
+  }
+
+  if (!selectedId || selectedIndex <= 0) {
+    showErrorNode(jailReleaseSelectError, "Select a release point.");
+    if (jailReleaseSelect) jailReleaseSelect.focus();
+    return;
+  }
+
+  showErrorNode(jailReleaseSelectError, "");
+  if (jailReleaseSubmitBtn) {
+    jailReleaseSubmitBtn.disabled = true;
+    jailReleaseSubmitBtn.textContent = "Releasing...";
+  }
+
+  try {
+    var response = await postNui("cadBridgeJailReleaseSubmit", {
+      selected_release_id: selectedId,
+      selected_release_index: selectedIndex,
+      index: selectedIndex,
+    });
+    var result = null;
+    try {
+      result = await response.json();
+    } catch (_err) {
+      result = null;
+    }
+    if (!response.ok || (result && result.ok === false)) {
+      showErrorNode(jailReleaseSelectError, "Unable to release at the selected point.");
+      if (jailReleaseSubmitBtn) {
+        jailReleaseSubmitBtn.disabled = false;
+        jailReleaseSubmitBtn.textContent = "Release Me";
+      }
+      return;
+    }
+    closeJailReleaseForm();
+  } catch (_err2) {
+    showErrorNode(jailReleaseSelectError, "Unable to release at the selected point.");
+    if (jailReleaseSubmitBtn) {
+      jailReleaseSubmitBtn.disabled = false;
+      jailReleaseSubmitBtn.textContent = "Release Me";
+    }
+  }
+}
+
+function cancelJailReleaseForm() {
+  if (!jailReleaseOpen) return;
+  postNui("cadBridgeJailReleaseCancel", {}).catch(function ignoreJailReleaseCancelError() {});
+  closeJailReleaseForm();
 }
 
 var LICENSE_QUIZ_QUESTION_POOL = [
@@ -1323,6 +1497,15 @@ window.addEventListener("message", function onMessage(event) {
     closeTrafficStopForm();
     return;
   }
+  if (message.action === "cadBridgeJailRelease:open") {
+    openJailReleaseForm(message.payload || {});
+    postNui("cadBridgeJailReleaseOpened", {}).catch(function ignoreJailReleaseOpenedError() {});
+    return;
+  }
+  if (message.action === "cadBridgeJailRelease:close") {
+    closeJailReleaseForm();
+    return;
+  }
   if (message.action === "cadBridgeLicense:open") {
     openLicenseForm(message.payload || {});
     return;
@@ -1727,6 +1910,7 @@ function initialize() {
 
   setVisible(overlay, false);
   setVisible(trafficStopOverlay, false);
+  setVisible(jailReleaseOverlay, false);
   setVisible(licenseOverlay, false);
   setVisible(registrationOverlay, false);
   setVisible(idCardOverlay, false);
@@ -1794,6 +1978,20 @@ function initialize() {
     });
   }
   updateTrafficStopCounters();
+
+  if (jailReleaseForm) {
+    jailReleaseForm.addEventListener("submit", function onJailReleaseSubmit(event) {
+      event.preventDefault();
+      submitJailReleaseForm();
+    });
+  }
+  if (jailReleaseCloseBtn) jailReleaseCloseBtn.addEventListener("click", cancelJailReleaseForm);
+  if (jailReleaseCancelBtn) jailReleaseCancelBtn.addEventListener("click", cancelJailReleaseForm);
+  if (jailReleaseSelect) {
+    jailReleaseSelect.addEventListener("change", function onJailReleaseSelectChange() {
+      if (String(jailReleaseSelect.value || "").trim()) showErrorNode(jailReleaseSelectError, "");
+    });
+  }
 
   if (licenseForm) {
     licenseForm.addEventListener("submit", function onLicenseSubmit(event) {
@@ -1863,6 +2061,11 @@ function initialize() {
     .then(function noopTrafficStopReady() {})
     .catch(function onTrafficStopReadyError(err2) {
       console.error("[CAD UI] Traffic stop ready signal failed:", err2);
+    });
+  postNui("cadBridgeJailReleaseReady", {})
+    .then(function noopJailReleaseReady() {})
+    .catch(function onJailReleaseReadyError(err3) {
+      console.error("[CAD UI] Jail release ready signal failed:", err3);
     });
 
   updateMiniCadTabVisibility();

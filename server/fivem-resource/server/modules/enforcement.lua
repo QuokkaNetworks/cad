@@ -1774,6 +1774,32 @@ local function applyJail(job)
     return false, 'Target character is not currently online', true
   end
 
+  if adapter == 'cad-bridge' or adapter == 'cad_bridge' or adapter == 'cad' then
+    local releasePoints = type(Config.CadBridgeJailReleasePoints) == 'table' and Config.CadBridgeJailReleasePoints or {}
+    local spawnPoints = {}
+    if type(Config.CadBridgeJailSpawnPoints) == 'table' and #Config.CadBridgeJailSpawnPoints > 0 then
+      spawnPoints = Config.CadBridgeJailSpawnPoints
+    elseif type(Config.Spawns) == 'table' and #Config.Spawns > 0 then
+      spawnPoints = Config.Spawns
+    end
+
+    TriggerClientEvent('cad_bridge:jailSentenceStart', sourceId, {
+      minutes = minutes,
+      reason = reason,
+      citizen_id = citizenId,
+      release_points = releasePoints,
+      spawn_points = spawnPoints,
+      issued_at = os.time(),
+    })
+
+    local message = ('You have been sentenced to %s minute(s)'):format(tostring(minutes))
+    if reason ~= '' then
+      message = message .. (' | %s'):format(reason)
+    end
+    notifyAlert(sourceId, 'CAD Sentence', message, 'error')
+    return true, '', false
+  end
+
   if adapter == 'xt-prison' then
     if GetResourceState('xt-prison') ~= 'started' then
       return false, 'xt-prison is not started', false

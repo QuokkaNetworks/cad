@@ -10,6 +10,7 @@ version '0.1.0'
 shared_script 'config.lua'
 client_scripts {
   'client/modules/shared.lua',
+  'client/modules/jail.lua',
   'client/modules/license.lua',
   'client/modules/registration.lua',
   'client/modules/documents_ui.lua',

@@ -82,6 +82,10 @@ body * {
   width: min(1020px, 96vw);
 }
 
+.panel-jail-release {
+  width: min(760px, 95vw);
+}
+
 .panel-license,
 .panel-registration {
   --cad-surface: #edf6f1;
