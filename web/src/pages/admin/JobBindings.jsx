@@ -12,6 +12,13 @@ function renderJobTarget(mapping) {
   return `${jobName} / Rank ${Math.max(0, Math.trunc(parsedGrade))}`;
 }
 
+function isValidOptionalRankInput(value) {
+  const gradeText = String(value ?? '').trim();
+  if (!gradeText) return true;
+  const parsed = Number(gradeText);
+  return Number.isFinite(parsed) && parsed >= 0;
+}
+
 function describePreviewReason(reason) {
   const normalized = String(reason || '').trim();
   if (!normalized) return '';
@@ -39,6 +46,12 @@ export default function AdminJobBindings() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState(null);
   const [syncingUser, setSyncingUser] = useState(false);
+  const [editingMappingId, setEditingMappingId] = useState(0);
+  const [editSelectedRole, setEditSelectedRole] = useState('');
+  const [editSelectedRoleName, setEditSelectedRoleName] = useState('');
+  const [editJobName, setEditJobName] = useState('');
+  const [editJobGrade, setEditJobGrade] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   async function fetchData() {
     try {
@@ -65,12 +78,21 @@ export default function AdminJobBindings() {
   const canAddMapping = useMemo(() => {
     if (!selectedRole) return false;
     const name = String(jobName || '').trim();
-    const gradeText = String(jobGrade ?? '').trim();
     if (!name.length) return false;
-    if (!gradeText) return true;
-    const parsed = Number(gradeText);
-    return Number.isFinite(parsed) && parsed >= 0;
+    return isValidOptionalRankInput(jobGrade);
   }, [selectedRole, jobName, jobGrade]);
+
+  const editingMapping = useMemo(
+    () => mappings.find((m) => Number(m?.id || 0) === Number(editingMappingId || 0)) || null,
+    [mappings, editingMappingId]
+  );
+
+  const canSaveEdit = useMemo(() => {
+    if (!editingMappingId || !editSelectedRole) return false;
+    const name = String(editJobName || '').trim();
+    if (!name) return false;
+    return isValidOptionalRankInput(editJobGrade);
+  }, [editingMappingId, editSelectedRole, editJobName, editJobGrade]);
 
   async function addMapping() {
     if (!canAddMapping) return;
@@ -112,6 +134,46 @@ export default function AdminJobBindings() {
       alert('Sync failed: ' + err.message);
     } finally {
       setSyncing(false);
+    }
+  }
+
+  function startEditMapping(mapping) {
+    if (!mapping) return;
+    setEditingMappingId(Number(mapping.id || 0));
+    setEditSelectedRole(String(mapping.discord_role_id || ''));
+    setEditSelectedRoleName(String(mapping.discord_role_name || '').trim());
+    setEditJobName(String(mapping.job_name || ''));
+    const parsedGrade = Number(mapping?.job_grade);
+    setEditJobGrade(Number.isFinite(parsedGrade) && parsedGrade >= 0 ? String(Math.trunc(parsedGrade)) : '');
+  }
+
+  function cancelEditMapping() {
+    setEditingMappingId(0);
+    setEditSelectedRole('');
+    setEditSelectedRoleName('');
+    setEditJobName('');
+    setEditJobGrade('');
+    setSavingEdit(false);
+  }
+
+  async function saveEditMapping() {
+    if (!canSaveEdit || !editingMappingId) return;
+    const role = discordRoles.find(r => r.id === editSelectedRole);
+    try {
+      setSavingEdit(true);
+      const trimmedGrade = String(editJobGrade ?? '').trim();
+      await api.put(`/api/admin/role-mappings/${editingMappingId}`, {
+        discord_role_id: editSelectedRole,
+        discord_role_name: role?.name || editSelectedRoleName || '',
+        target_type: 'job',
+        job_name: String(editJobName || '').trim(),
+        job_grade: trimmedGrade ? Math.max(0, Number(trimmedGrade || 0)) : null,
+      });
+      cancelEditMapping();
+      fetchData();
+    } catch (err) {
+      alert('Failed to update job binding: ' + err.message);
+      setSavingEdit(false);
     }
   }
 
@@ -357,12 +419,20 @@ export default function AdminJobBindings() {
                     <span className="font-mono text-cad-ink">{renderJobTarget(m)}</span>
                   </td>
                   <td className="px-4 py-2">
-                    <button
-                      onClick={() => deleteMapping(m.id)}
-                      className="text-xs text-red-400 hover:text-red-300"
-                    >
-                      Remove
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => startEditMapping(m)}
+                        className="text-xs text-cad-accent hover:text-cad-accent-light"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deleteMapping(m.id)}
+                        className="text-xs text-red-400 hover:text-red-300"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -372,6 +442,77 @@ export default function AdminJobBindings() {
           <p className="px-4 py-6 text-sm text-cad-muted text-center">No job bindings configured</p>
         )}
       </div>
+
+      {editingMappingId ? (
+        <div className="bg-cad-card border border-cad-accent/40 rounded-lg p-4 mb-6">
+          <h3 className="text-sm font-semibold mb-3">Edit Job Binding</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <div>
+              <label className="block text-xs text-cad-muted mb-1">Discord Role</label>
+              <select
+                value={editSelectedRole}
+                onChange={e => {
+                  const nextId = e.target.value;
+                  setEditSelectedRole(nextId);
+                  const role = discordRoles.find(r => r.id === nextId);
+                  if (role?.name) setEditSelectedRoleName(role.name);
+                }}
+                className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm focus:outline-none focus:border-cad-accent"
+              >
+                <option value="">Select role...</option>
+                {editSelectedRole && !discordRoles.some(r => r.id === editSelectedRole) ? (
+                  <option value={editSelectedRole}>
+                    {editSelectedRoleName || '(Current Role Unavailable)'} ({editSelectedRole})
+                  </option>
+                ) : null}
+                {discordRoles.map(r => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-cad-muted mb-1">Job Name</label>
+              <input
+                type="text"
+                value={editJobName}
+                onChange={e => setEditJobName(e.target.value)}
+                className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm focus:outline-none focus:border-cad-accent"
+                placeholder="police"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-cad-muted mb-1">Job Rank (Optional)</label>
+              <input
+                type="number"
+                min="0"
+                value={editJobGrade}
+                onChange={e => setEditJobGrade(e.target.value)}
+                className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm focus:outline-none focus:border-cad-accent"
+                placeholder="Any"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={saveEditMapping}
+                disabled={!canSaveEdit || savingEdit}
+                className="flex-1 px-4 py-2 bg-cad-accent hover:bg-cad-accent-light text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {savingEdit ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                onClick={cancelEditMapping}
+                disabled={savingEdit}
+                className="px-4 py-2 bg-cad-surface hover:bg-cad-card border border-cad-border text-cad-ink rounded text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-cad-muted mt-2">
+            Editing binding #{editingMappingId}{editingMapping ? ` (${renderJobTarget(editingMapping)})` : ''}. Leave rank blank to match any rank.
+          </p>
+        </div>
+      ) : null}
 
       <div className="bg-cad-card border border-cad-border rounded-lg p-4">
         <h3 className="text-sm font-semibold mb-3">Add Job Binding</h3>

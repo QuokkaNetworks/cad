@@ -359,7 +359,7 @@ router.get('/role-mappings', (req, res) => {
   res.json(DiscordRoleMappings.list());
 });
 
-router.post('/role-mappings', (req, res) => {
+function resolveRoleMappingPayload(body = {}) {
   const {
     discord_role_id,
     discord_role_name,
@@ -368,15 +368,16 @@ router.post('/role-mappings', (req, res) => {
     department_id,
     job_name,
     job_grade,
-  } = req.body;
+  } = body;
+  const errors = [];
 
   // Backward compatibility: treat department_id as department target.
   const resolvedType = target_type || (department_id ? 'department' : '');
   if (!discord_role_id || !resolvedType) {
-    return res.status(400).json({ error: 'discord_role_id and target_type are required' });
+    errors.push('discord_role_id and target_type are required');
   }
-  if (!['department', 'sub_department', 'job'].includes(resolvedType)) {
-    return res.status(400).json({ error: 'target_type must be department, sub_department, or job' });
+  if (resolvedType && !['department', 'sub_department', 'job'].includes(resolvedType)) {
+    errors.push('target_type must be department, sub_department, or job');
   }
 
   let resolvedTargetId = 0;
@@ -386,19 +387,19 @@ router.post('/role-mappings', (req, res) => {
   if (resolvedType === 'department' || resolvedType === 'sub_department') {
     resolvedTargetId = parseInt(target_id || department_id, 10);
     if (!resolvedTargetId) {
-      return res.status(400).json({ error: 'target_id is required for department/sub_department mappings' });
+      errors.push('target_id is required for department/sub_department mappings');
     }
   }
-  if (resolvedType === 'department' && !Departments.findById(resolvedTargetId)) {
-    return res.status(400).json({ error: 'Department target not found' });
+  if (resolvedType === 'department' && resolvedTargetId && !Departments.findById(resolvedTargetId)) {
+    errors.push('Department target not found');
   }
-  if (resolvedType === 'sub_department' && !SubDepartments.findById(resolvedTargetId)) {
-    return res.status(400).json({ error: 'Sub-department target not found' });
+  if (resolvedType === 'sub_department' && resolvedTargetId && !SubDepartments.findById(resolvedTargetId)) {
+    errors.push('Sub-department target not found');
   }
   if (resolvedType === 'job') {
     resolvedJobName = String(job_name || '').trim();
     if (!resolvedJobName) {
-      return res.status(400).json({ error: 'job_name is required for job mappings' });
+      errors.push('job_name is required for job mappings');
     }
     const rawGrade = job_grade;
     const rawGradeText = String(rawGrade ?? '').trim();
@@ -407,7 +408,7 @@ router.post('/role-mappings', (req, res) => {
     } else {
       const parsedGrade = Number(rawGrade);
       if (!Number.isFinite(parsedGrade)) {
-        return res.status(400).json({ error: 'job_grade must be a number, or leave it blank for any rank' });
+        errors.push('job_grade must be a number, or leave it blank for any rank');
       }
       if (parsedGrade < 0) {
         resolvedJobGrade = -1;
@@ -417,19 +418,56 @@ router.post('/role-mappings', (req, res) => {
     }
   }
 
+  if (errors.length > 0) {
+    return { error: errors[0] };
+  }
+
+  return {
+    discord_role_id: String(discord_role_id || '').trim(),
+    discord_role_name: String(discord_role_name || '').trim(),
+    target_type: resolvedType,
+    target_id: resolvedTargetId,
+    job_name: resolvedJobName,
+    job_grade: resolvedJobGrade,
+  };
+}
+
+router.post('/role-mappings', (req, res) => {
+  const resolved = resolveRoleMappingPayload(req.body || {});
+  if (resolved?.error) {
+    return res.status(400).json({ error: resolved.error });
+  }
+
   try {
-    const mapping = DiscordRoleMappings.create({
-      discord_role_id,
-      discord_role_name: discord_role_name || '',
-      target_type: resolvedType,
-      target_id: resolvedTargetId,
-      job_name: resolvedJobName,
-      job_grade: resolvedJobGrade,
-    });
+    const mapping = DiscordRoleMappings.create(resolved);
     audit(req.user.id, 'role_mapping_created', { mapping });
     res.status(201).json(mapping);
   } catch (err) {
     if (err.message.includes('UNIQUE')) {
+      return res.status(400).json({ error: 'This Discord role is already mapped to that target' });
+    }
+    throw err;
+  }
+});
+
+router.put('/role-mappings/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id) return res.status(400).json({ error: 'Invalid mapping id' });
+
+  const existing = DiscordRoleMappings.findById(id);
+  if (!existing) return res.status(404).json({ error: 'Role mapping not found' });
+
+  const resolved = resolveRoleMappingPayload(req.body || {});
+  if (resolved?.error) {
+    return res.status(400).json({ error: resolved.error });
+  }
+
+  try {
+    const updated = DiscordRoleMappings.update(id, resolved);
+    audit(req.user.id, 'role_mapping_updated', { mappingId: id, before: existing, after: updated });
+    res.json(updated);
+  } catch (err) {
+    if (String(err.message).includes('UNIQUE')) {
       return res.status(400).json({ error: 'This Discord role is already mapped to that target' });
     }
     throw err;

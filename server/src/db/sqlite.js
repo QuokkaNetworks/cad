@@ -404,6 +404,9 @@ const DiscordRoleMappings = {
       ORDER BY drl.id
     `).all();
   },
+  findById(id) {
+    return db.prepare('SELECT * FROM discord_role_links WHERE id = ?').get(id);
+  },
   findByRoleId(roleId) {
     return db.prepare('SELECT * FROM discord_role_links WHERE discord_role_id = ?').all(roleId);
   },
@@ -440,6 +443,42 @@ const DiscordRoleMappings = {
       job_name: normalizedJobName,
       job_grade: normalizedJobGrade,
     };
+  },
+  update(id, { discord_role_id, discord_role_name, target_type, target_id, job_name, job_grade }) {
+    const existing = this.findById(id);
+    if (!existing) return null;
+
+    const normalizedTargetId = Number.isFinite(Number(target_id)) ? Math.max(0, Math.trunc(Number(target_id))) : 0;
+    const normalizedJobName = String(job_name || '').trim();
+    const normalizedJobGradeRaw = Number(job_grade);
+    const isJobWildcardGrade = target_type === 'job' && Number.isFinite(normalizedJobGradeRaw) && normalizedJobGradeRaw < 0;
+    const normalizedJobGrade = isJobWildcardGrade
+      ? -1
+      : (Number.isFinite(normalizedJobGradeRaw)
+        ? Math.max(0, Math.trunc(normalizedJobGradeRaw))
+        : 0);
+
+    db.prepare(`
+      UPDATE discord_role_links
+      SET
+        discord_role_id = ?,
+        discord_role_name = ?,
+        target_type = ?,
+        target_id = ?,
+        job_name = ?,
+        job_grade = ?
+      WHERE id = ?
+    `).run(
+      String(discord_role_id || '').trim(),
+      String(discord_role_name || '').trim(),
+      String(target_type || '').trim(),
+      normalizedTargetId,
+      normalizedJobName,
+      normalizedJobGrade,
+      id
+    );
+
+    return this.findById(id);
   },
   delete(id) {
     db.prepare('DELETE FROM discord_role_links WHERE id = ?').run(id);
