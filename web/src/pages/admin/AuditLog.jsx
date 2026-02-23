@@ -22,12 +22,18 @@ export default function AdminAuditLog() {
   useEffect(() => { fetchLog(); }, [offset, locationKey]);
 
   return (
-    <div>
+    <div className="max-w-7xl space-y-6">
       <AdminPageHeader
         title="Audit Log"
         subtitle="Review administrative and system activity events."
+        links={[
+          { to: '/admin/users', label: 'Users' },
+          { to: '/admin/departments', label: 'Departments' },
+          { to: '/admin/settings', label: 'System Settings' },
+        ]}
       />
 
+      <div className="bg-cad-card border border-cad-border rounded-xl overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -52,8 +58,9 @@ export default function AdminAuditLog() {
           </tbody>
         </table>
       </div>
+      </div>
 
-      <div className="flex justify-between mt-4">
+      <div className="flex justify-between">
         <button
           onClick={() => setOffset(Math.max(0, offset - limit))}
           disabled={offset === 0}

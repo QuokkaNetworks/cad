@@ -348,13 +348,19 @@ export default function AdminOffenceCatalog() {
   }
 
   return (
-    <div>
+    <div className="max-w-7xl space-y-6">
       <AdminPageHeader
         title="Offence Catalog"
         subtitle="Create preset Victorian-style offence entries for Infringements, Summary, and Indictments."
+        links={[
+          { to: '/admin/departments', label: 'Departments' },
+          { to: '/admin/settings', label: 'System Settings' },
+          { to: '/admin/audit-log', label: 'Audit Log' },
+        ]}
       />
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="bg-cad-card border border-cad-border rounded-xl p-4">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -415,6 +421,7 @@ export default function AdminOffenceCatalog() {
           className="hidden"
           onChange={handleCsvImportFile}
         />
+      </div>
       </div>
 
       {loading ? (

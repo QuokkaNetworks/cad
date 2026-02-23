@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import AdminPageHeader from '../../components/AdminPageHeader';
 
@@ -35,6 +35,7 @@ function describePreviewReason(reason) {
 
 export default function AdminJobBindings() {
   const { key: locationKey } = useLocation();
+  const navigate = useNavigate();
   const [mappings, setMappings] = useState([]);
   const [discordRoles, setDiscordRoles] = useState([]);
   const [users, setUsers] = useState([]);
@@ -222,23 +223,44 @@ export default function AdminJobBindings() {
   }
 
   return (
-    <div>
+    <div className="max-w-7xl space-y-6">
       <AdminPageHeader
         title="Job Bindings"
         subtitle="Bind Discord roles directly to in-game jobs with optional rank matching."
+        links={[
+          { to: '/admin/role-mappings', label: 'Role Access Sync' },
+          { to: '/admin/qbox-settings', label: 'QBox Settings' },
+          { to: '/admin/settings', label: 'System Settings' },
+        ]}
       />
 
-      <div className="flex items-center justify-between mb-6">
-        <button
-          onClick={syncAll}
-          disabled={syncing}
-          className="px-4 py-2 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-        >
-          {syncing ? 'Syncing...' : 'Sync All Members'}
-        </button>
+      <div className="bg-cad-card border border-cad-border rounded-xl p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">Job Role Sync Toolkit</p>
+            <p className="text-xs text-cad-muted mt-1">
+              Confirm QBox job source settings first, then preview a user here before syncing all members.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => navigate('/admin/qbox-settings')}
+              className="px-4 py-2 bg-cad-surface border border-cad-border hover:bg-cad-card text-cad-ink rounded-lg text-sm font-medium transition-colors"
+            >
+              Open QBox Settings
+            </button>
+            <button
+              onClick={syncAll}
+              disabled={syncing}
+              className="px-4 py-2 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {syncing ? 'Syncing...' : 'Sync All Members'}
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="bg-cad-card border border-cad-border rounded-lg p-4 mb-6">
+      <div className="bg-cad-card border border-cad-border rounded-xl p-5">
         <h3 className="text-sm font-semibold mb-3">Debug User Job Sync</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <div className="md:col-span-2">
@@ -396,11 +418,12 @@ export default function AdminJobBindings() {
         )}
       </div>
 
-      <div className="bg-cad-card border border-cad-border rounded-lg overflow-hidden mb-6">
+      <div className="bg-cad-card border border-cad-border rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-cad-border">
           <h3 className="text-sm font-semibold">Current Job Bindings</h3>
         </div>
         {mappings.length > 0 ? (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-cad-border text-left text-xs text-cad-muted uppercase tracking-wider">
@@ -438,13 +461,14 @@ export default function AdminJobBindings() {
               ))}
             </tbody>
           </table>
+          </div>
         ) : (
           <p className="px-4 py-6 text-sm text-cad-muted text-center">No job bindings configured</p>
         )}
       </div>
 
       {editingMappingId ? (
-        <div className="bg-cad-card border border-cad-accent/40 rounded-lg p-4 mb-6">
+        <div className="bg-cad-card border border-cad-accent/40 rounded-xl p-4">
           <h3 className="text-sm font-semibold mb-3">Edit Job Binding</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
             <div>
@@ -514,7 +538,8 @@ export default function AdminJobBindings() {
         </div>
       ) : null}
 
-      <div className="bg-cad-card border border-cad-border rounded-lg p-4">
+      <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-6">
+        <div className="bg-cad-card border border-cad-border rounded-xl p-5">
         <h3 className="text-sm font-semibold mb-3">Add Job Binding</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <div>
@@ -570,6 +595,25 @@ export default function AdminJobBindings() {
         {discordRoles.length === 0 && (
           <p className="text-xs text-cad-muted mt-2">Discord bot may not be connected. Roles will appear when the bot is online.</p>
         )}
+        </div>
+
+        <div className="bg-cad-card border border-cad-border rounded-xl p-4">
+          <h4 className="text-sm font-semibold">Recommended Workflow</h4>
+          <ol className="list-decimal list-inside mt-2 space-y-2 text-xs text-cad-muted">
+            <li>Set the job table/columns in `QBox Settings`.</li>
+            <li>Use `Debug User Job Sync` to confirm detected jobs and grades.</li>
+            <li>Add bindings and test with `Sync This User` first.</li>
+            <li>Run `Sync All Members` once the preview looks correct.</li>
+          </ol>
+          <div className="mt-4 pt-4 border-t border-cad-border">
+            <button
+              onClick={() => navigate('/admin/role-mappings')}
+              className="w-full px-3 py-2 text-sm bg-cad-surface border border-cad-border rounded hover:bg-cad-card transition-colors"
+            >
+              Open Role Access Sync
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

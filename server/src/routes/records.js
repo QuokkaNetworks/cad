@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../auth/middleware');
+const { requireAuth, requireFiveMOnline } = require('../auth/middleware');
 const {
   CriminalRecords,
   Units,
@@ -21,6 +21,8 @@ const ARREST_REPORT_WORKFLOW = {
   SUPERVISOR_REVIEW: 'supervisor_review',
   FINALIZED: 'finalized',
 };
+
+router.use(requireAuth, requireFiveMOnline);
 
 function parseSqliteUtc(value) {
   const text = String(value || '').trim();

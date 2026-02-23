@@ -109,74 +109,86 @@ export default function AdminRoleMappings() {
   }
 
   return (
-    <div>
+    <div className="max-w-6xl space-y-6">
       <AdminPageHeader
         title="Role Access Sync"
         subtitle="Map Discord roles to department and sub-department access."
+        links={[
+          { to: '/admin/job-bindings', label: 'Job Role Sync' },
+          { to: '/admin/qbox-settings', label: 'QBox Settings' },
+          { to: '/admin/settings', label: 'System Settings' },
+        ]}
       />
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={syncAll}
-            disabled={syncing}
-            className="px-4 py-2 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-          >
-            {syncing ? 'Syncing...' : 'Sync All Members'}
-          </button>
-          <button
-            onClick={() => navigate('/admin/job-bindings')}
-            className="px-4 py-2 bg-cad-surface hover:bg-cad-card text-cad-ink rounded-lg text-sm font-medium border border-cad-border transition-colors"
-          >
-            Open Job Role Sync
-          </button>
+      <div className="bg-cad-card border border-cad-border rounded-xl p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">Discord Access Sync</p>
+            <p className="text-xs text-cad-muted mt-1">
+              Department/sub-department access is managed here. Job/grade Discord role mappings are managed in Job Role Sync.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => navigate('/admin/job-bindings')}
+              className="px-4 py-2 bg-cad-surface hover:bg-cad-card text-cad-ink rounded-lg text-sm font-medium border border-cad-border transition-colors"
+            >
+              Open Job Role Sync
+            </button>
+            <button
+              onClick={syncAll}
+              disabled={syncing}
+              className="px-4 py-2 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {syncing ? 'Syncing...' : 'Sync All Members'}
+            </button>
+          </div>
         </div>
-        <p className="text-xs text-cad-muted">
-          Job/grade Discord role mappings are managed in Job Role Sync.
-        </p>
       </div>
 
-      <div className="bg-cad-card border border-cad-border rounded-lg overflow-hidden mb-6">
+      <div className="bg-cad-card border border-cad-border rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-cad-border">
           <h3 className="text-sm font-semibold">Current Mappings</h3>
         </div>
         {mappings.length > 0 ? (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-cad-border text-left text-xs text-cad-muted uppercase tracking-wider">
-                <th className="px-4 py-2">Discord Role</th>
-                <th className="px-4 py-2">Role ID</th>
-                <th className="px-4 py-2">Type</th>
-                <th className="px-4 py-2">Target</th>
-                <th className="px-4 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {mappings.map(m => (
-                <tr key={m.id} className="border-b border-cad-border/50">
-                  <td className="px-4 py-2 font-medium">{m.discord_role_name || '-'}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-cad-muted">{m.discord_role_id}</td>
-                  <td className="px-4 py-2 text-xs uppercase text-cad-muted">{m.target_type}</td>
-                  <td className="px-4 py-2">
-                    {renderTarget(m)}
-                  </td>
-                  <td className="px-4 py-2">
-                    <button
-                      onClick={() => deleteMapping(m.id)}
-                      className="text-xs text-red-400 hover:text-red-300"
-                    >
-                      Remove
-                    </button>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-cad-border text-left text-xs text-cad-muted uppercase tracking-wider">
+                  <th className="px-4 py-2">Discord Role</th>
+                  <th className="px-4 py-2">Role ID</th>
+                  <th className="px-4 py-2">Type</th>
+                  <th className="px-4 py-2">Target</th>
+                  <th className="px-4 py-2"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {mappings.map(m => (
+                  <tr key={m.id} className="border-b border-cad-border/50">
+                    <td className="px-4 py-2 font-medium">{m.discord_role_name || '-'}</td>
+                    <td className="px-4 py-2 font-mono text-xs text-cad-muted">{m.discord_role_id}</td>
+                    <td className="px-4 py-2 text-xs uppercase text-cad-muted">{m.target_type}</td>
+                    <td className="px-4 py-2">
+                      {renderTarget(m)}
+                    </td>
+                    <td className="px-4 py-2">
+                      <button
+                        onClick={() => deleteMapping(m.id)}
+                        className="text-xs text-red-400 hover:text-red-300"
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <p className="px-4 py-6 text-sm text-cad-muted text-center">No mappings configured</p>
         )}
       </div>
 
-      <div className="bg-cad-card border border-cad-border rounded-lg p-4">
+      <div className="bg-cad-card border border-cad-border rounded-xl p-5">
         <h3 className="text-sm font-semibold mb-3">Add Mapping</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <div>

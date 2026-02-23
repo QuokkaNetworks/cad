@@ -2,7 +2,7 @@ const express = require('express');
 const passport = require('passport');
 const config = require('../config');
 const { generateToken } = require('../auth/jwt');
-const { requireAuth } = require('../auth/middleware');
+const { requireAuth, getUserFiveMOnlineStatus } = require('../auth/middleware');
 const { Users, UserDepartments, UserSubDepartments } = require('../db/sqlite');
 const { audit } = require('../utils/audit');
 
@@ -65,6 +65,7 @@ router.get('/me', requireAuth, (req, res) => {
   const { id, steam_id, steam_name, avatar_url, discord_id, discord_name, is_admin, created_at } = req.user;
   const departments = req.user.departments;
   const sub_departments = req.user.sub_departments || [];
+  const fivemStatus = getUserFiveMOnlineStatus(req.user);
   res.json({
     id,
     steam_id,
@@ -76,6 +77,10 @@ router.get('/me', requireAuth, (req, res) => {
     created_at,
     departments,
     sub_departments,
+    is_fivem_online: !!fivemStatus.online,
+    fivem_online_reason: fivemStatus.reason || '',
+    fivem_link_updated_at: fivemStatus.link?.updated_at || null,
+    fivem_citizen_id: String(fivemStatus.link?.citizen_id || '').trim() || null,
   });
 });
 

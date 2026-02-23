@@ -60,6 +60,7 @@ export function AuthProvider({ children }) {
     loading,
     isAuthenticated: !!user,
     isAdmin: user?.is_admin || false,
+    isFiveMOnline: !!user?.is_fivem_online,
     departments: user?.departments || [],
     logout,
     refreshUser,

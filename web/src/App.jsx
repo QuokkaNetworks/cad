@@ -4,6 +4,7 @@ import { DepartmentProvider } from './context/DepartmentContext';
 import { EventSourceProvider } from './context/EventSourceContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import RequireDepartment from './components/RequireDepartment';
+import RequireFiveMOnline from './components/RequireFiveMOnline';
 import MainLayout from './layouts/MainLayout';
 import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
@@ -60,11 +61,11 @@ export default function App() {
             <Route path="/dispatch" element={<RequireDepartment><Dispatch /></RequireDepartment>} />
             <Route path="/units" element={<RequireDepartment><Units /></RequireDepartment>} />
             <Route path="/search" element={<RequireDepartment><Search /></RequireDepartment>} />
-            <Route path="/records" element={<RequireDepartment><Records /></RequireDepartment>} />
-            <Route path="/arrest-reports" element={<RequireDepartment><ArrestReports /></RequireDepartment>} />
+            <Route path="/records" element={<RequireDepartment><RequireFiveMOnline featureLabel="records"><Records /></RequireFiveMOnline></RequireDepartment>} />
+            <Route path="/arrest-reports" element={<RequireDepartment><RequireFiveMOnline featureLabel="arrest reports"><ArrestReports /></RequireFiveMOnline></RequireDepartment>} />
             <Route path="/bolos" element={<RequireDepartment><BOLOs /></RequireDepartment>} />
-            <Route path="/warrants" element={<RequireDepartment><Warrants /></RequireDepartment>} />
-            <Route path="/evidence" element={<RequireDepartment><EvidenceManagement /></RequireDepartment>} />
+            <Route path="/warrants" element={<RequireDepartment><RequireFiveMOnline featureLabel="warrants"><Warrants /></RequireFiveMOnline></RequireDepartment>} />
+            <Route path="/evidence" element={<RequireDepartment><RequireFiveMOnline featureLabel="evidence management"><EvidenceManagement /></RequireFiveMOnline></RequireDepartment>} />
             <Route path="/ems-treatment" element={<RequireDepartment><EmsTreatmentLog /></RequireDepartment>} />
             <Route path="/ems-transport" element={<RequireDepartment><EmsTransportTracker /></RequireDepartment>} />
             <Route path="/fire-apparatus" element={<RequireDepartment><FireApparatus /></RequireDepartment>} />

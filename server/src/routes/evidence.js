@@ -1,10 +1,12 @@
 const express = require('express');
-const { requireAuth } = require('../auth/middleware');
+const { requireAuth, requireFiveMOnline } = require('../auth/middleware');
 const { EvidenceItems, CriminalRecords, Warrants } = require('../db/sqlite');
 const { audit } = require('../utils/audit');
 const bus = require('../utils/eventBus');
 
 const router = express.Router();
+
+router.use(requireAuth, requireFiveMOnline);
 
 function normalizeEntityType(value) {
   const normalized = String(value || '').trim().toLowerCase();

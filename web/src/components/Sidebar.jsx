@@ -130,7 +130,7 @@ function SidebarLink({ to, label, icon }) {
 }
 
 export default function Sidebar() {
-  const { departments } = useAuth();
+  const { departments, isFiveMOnline } = useAuth();
   const { activeDepartment } = useDepartment();
   const [dispatcherOnline, setDispatcherOnline] = useState(false);
   const [isDispatchDepartment, setIsDispatchDepartment] = useState(false);
@@ -289,6 +289,11 @@ export default function Sidebar() {
   const navItems = getNavItemsForLayout(layoutType, activeDepartment).filter((item) => {
     const isDispatchTab = item.to === '/units' || item.to === '/dispatch';
     if (!isOnDuty && isDispatchTab) return false;
+    const requiresInGameOnline = item.to === '/records'
+      || item.to === '/arrest-reports'
+      || item.to === '/warrants'
+      || item.to === '/evidence';
+    if (requiresInGameOnline && !isFiveMOnline) return false;
     return true;
   });
 
@@ -308,6 +313,14 @@ export default function Sidebar() {
             {navWithCallDetails.map(item => (
               <SidebarLink key={item.to} {...item} />
             ))}
+            {!isFiveMOnline && (
+              <div className="mt-3 mx-1 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wider text-amber-300">In-Game Required</p>
+                <p className="text-xs text-cad-muted mt-1">
+                  Connect to the FiveM server to access records, arrest reports, warrants, and evidence.
+                </p>
+              </div>
+            )}
           </>
         ) : (
           <>

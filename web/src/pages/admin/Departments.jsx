@@ -380,12 +380,18 @@ export default function AdminDepartments() {
   }
 
   return (
-    <div>
+    <div className="max-w-7xl space-y-6">
       <AdminPageHeader
         title="Departments"
         subtitle="Create and manage departments, colors, and logo assets."
+        links={[
+          { to: '/admin/users', label: 'Users' },
+          { to: '/admin/role-mappings', label: 'Role Access Sync' },
+          { to: '/admin/alarm-zones', label: 'Alarm Zones' },
+        ]}
       />
-      <div className="flex items-center justify-between mb-6">
+      <div className="bg-cad-card border border-cad-border rounded-xl p-4">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowNew(true)}
@@ -400,6 +406,7 @@ export default function AdminDepartments() {
             + New Sub-Department
           </button>
         </div>
+      </div>
       </div>
 
       <div className="space-y-3">

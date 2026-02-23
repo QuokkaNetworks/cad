@@ -280,6 +280,11 @@ export default function AdminAlarmZones() {
       <AdminPageHeader
         title="Alarm Zones"
         subtitle="Create named police alarm trigger zones (circle or polygon). Changes are polled live by cad_bridge without editing config.lua."
+        links={[
+          { to: '/admin/departments', label: 'Departments' },
+          { to: '/admin/settings', label: 'System Settings' },
+          { to: '/admin/audit-log', label: 'Audit Log' },
+        ]}
       />
 
       <div className="bg-cad-card border border-cad-border rounded-xl p-5 space-y-4">

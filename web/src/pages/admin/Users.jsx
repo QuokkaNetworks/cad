@@ -78,20 +78,29 @@ export default function AdminUsers() {
   );
 
   return (
-    <div>
+    <div className="max-w-7xl space-y-6">
       <AdminPageHeader
         title="User Management"
         subtitle="Manage user access, roles, bans, and department membership."
+        links={[
+          { to: '/admin/departments', label: 'Departments' },
+          { to: '/admin/role-mappings', label: 'Role Access Sync' },
+          { to: '/admin/audit-log', label: 'Audit Log' },
+        ]}
       />
 
-      <input
-        type="text"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        placeholder="Search users..."
-        className="w-full max-w-md bg-cad-card border border-cad-border rounded px-3 py-2 text-sm mb-4 focus:outline-none focus:border-cad-accent"
-      />
+      <div className="bg-cad-card border border-cad-border rounded-xl p-4">
+        <label className="block text-xs uppercase tracking-wider text-cad-muted mb-2">Search Users</label>
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by Steam name, Discord name, or Steam ID..."
+          className="w-full max-w-lg bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm focus:outline-none focus:border-cad-accent"
+        />
+      </div>
 
+      <div className="bg-cad-card border border-cad-border rounded-xl overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -196,6 +205,7 @@ export default function AdminUsers() {
             ))}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   );

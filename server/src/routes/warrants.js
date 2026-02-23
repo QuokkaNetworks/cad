@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../auth/middleware');
+const { requireAuth, requireFiveMOnline } = require('../auth/middleware');
 const { Warrants } = require('../db/sqlite');
 const { audit } = require('../utils/audit');
 const bus = require('../utils/eventBus');
@@ -9,6 +9,8 @@ const {
 } = require('../utils/warrantCommunityPoster');
 
 const router = express.Router();
+
+router.use(requireAuth, requireFiveMOnline);
 
 // List active warrants for a department
 router.get('/', requireAuth, (req, res) => {

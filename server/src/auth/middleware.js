@@ -1,6 +1,8 @@
 const { verifyToken, generateToken } = require('./jwt');
 const config = require('../config');
-const { Users, UserDepartments, Departments, UserSubDepartments, SubDepartments } = require('../db/sqlite');
+const { Users, UserDepartments, Departments, UserSubDepartments, SubDepartments, FiveMPlayerLinks } = require('../db/sqlite');
+
+const FIVEM_LINK_ACTIVE_MAX_AGE_MS = 2 * 60 * 1000;
 
 function authCookieOptions() {
   const options = {
@@ -20,6 +22,36 @@ function getRefreshWindowSeconds() {
   const cookieSeconds = Math.floor((Number(config.auth.cookieMaxAgeMs || 0) || (30 * 24 * 60 * 60 * 1000)) / 1000);
   if (!Number.isFinite(cookieSeconds) || cookieSeconds <= 0) return 300;
   return Math.max(300, Math.floor(cookieSeconds / 3));
+}
+
+function parseSqliteUtc(value) {
+  const text = String(value || '').trim();
+  if (!text) return NaN;
+  const base = text.replace(' ', 'T');
+  const normalized = base.endsWith('Z') ? base : `${base}Z`;
+  return Date.parse(normalized);
+}
+
+function isActiveFiveMLink(link) {
+  if (!link) return false;
+  const ts = parseSqliteUtc(link.updated_at);
+  if (Number.isNaN(ts)) return false;
+  return (Date.now() - ts) <= FIVEM_LINK_ACTIVE_MAX_AGE_MS;
+}
+
+function getUserFiveMOnlineStatus(user) {
+  const steamId = String(user?.steam_id || '').trim();
+  if (!steamId) {
+    return { online: false, link: null, reason: 'missing_steam_id' };
+  }
+  const link = FiveMPlayerLinks.findBySteamId(steamId);
+  if (!link) {
+    return { online: false, link: null, reason: 'no_link' };
+  }
+  if (!isActiveFiveMLink(link)) {
+    return { online: false, link, reason: 'stale_link' };
+  }
+  return { online: true, link, reason: '' };
 }
 
 function requireAuth(req, res, next) {
@@ -84,4 +116,24 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, requireDepartment, requireAdmin };
+function requireFiveMOnline(req, res, next) {
+  const status = getUserFiveMOnlineStatus(req.user);
+  if (!status.online) {
+    return res.status(403).json({
+      error: 'You must be online in the FiveM server to access this resource',
+      code: 'fivem_online_required',
+      online: false,
+      reason: status.reason || 'offline',
+    });
+  }
+  req.fivemLink = status.link || null;
+  next();
+}
+
+module.exports = {
+  requireAuth,
+  requireDepartment,
+  requireAdmin,
+  requireFiveMOnline,
+  getUserFiveMOnlineStatus,
+};

@@ -149,11 +149,24 @@ export default function AdminSystemSettings() {
   }
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="max-w-6xl space-y-6">
       <AdminPageHeader
         title="System Settings"
         subtitle="Configure CAD integrations and backend data sources."
+        links={[
+          { to: '/admin/qbox-settings', label: 'QBox Settings' },
+          { to: '/admin/role-mappings', label: 'Role Access Sync' },
+          { to: '/admin/job-bindings', label: 'Job Role Sync' },
+          { to: '/admin/alarm-zones', label: 'Alarm Zones' },
+        ]}
       />
+
+      <div className="bg-cad-card border border-cad-border rounded-xl p-4">
+        <p className="text-sm font-semibold">System Integrations</p>
+        <p className="text-xs text-cad-muted mt-1">
+          Save applies all sections on this page. Use the related tools above for role mappings, QBox job source config, and alarm zone routing.
+        </p>
+      </div>
 
       {/* FiveM Bridge */}
       <div className="bg-cad-card border border-cad-border rounded-xl p-6">

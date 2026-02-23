@@ -118,13 +118,26 @@ export default function AdminQboxSettings() {
   }
 
   return (
-    <div>
+    <div className="max-w-6xl space-y-6">
       <AdminPageHeader
         title="QBox Settings"
         subtitle="Configure direct QBox MySQL connection and default table/column bindings."
+        links={[
+          { to: '/admin/job-bindings', label: 'Job Role Sync' },
+          { to: '/admin/role-mappings', label: 'Role Access Sync' },
+          { to: '/admin/settings', label: 'System Settings' },
+        ]}
       />
 
-      <div className="bg-cad-card border border-cad-border rounded-lg p-5 mb-4">
+      <div className="bg-cad-card border border-cad-border rounded-xl p-4">
+        <p className="text-sm font-semibold">QBox Connection & Job Source</p>
+        <p className="text-xs text-cad-muted mt-1">
+          This page controls QBox direct lookups used by search, fines, and Discord job role sync. If using `q_multipjob` or `g_multijob`,
+          set the job source table and match/job/grade columns here first.
+        </p>
+      </div>
+
+      <div className="bg-cad-card border border-cad-border rounded-xl p-5">
         <h3 className="text-sm font-semibold text-cad-muted uppercase tracking-wider mb-4">MySQL Connection</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
@@ -281,7 +294,7 @@ export default function AdminQboxSettings() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 mt-4">
+        <div className="flex flex-wrap items-center gap-2 mt-5">
           <button
             onClick={() => saveSettings(true)}
             disabled={saving}
@@ -304,7 +317,7 @@ export default function AdminQboxSettings() {
         </div>
 
         {schemaResult && (
-          <div className="mt-3 text-xs">
+          <div className="mt-4 text-xs rounded-lg border border-cad-border bg-cad-surface/60 p-3">
             {Array.isArray(schemaResult.errors) && schemaResult.errors.length > 0 && (
               <div className="text-red-400 whitespace-pre-wrap">
                 {'Errors:\n- ' + schemaResult.errors.join('\n- ')}
@@ -334,8 +347,11 @@ export default function AdminQboxSettings() {
         )}
       </div>
 
-      <div className="bg-cad-card border border-cad-border rounded-lg p-5">
+      <div className="bg-cad-card border border-cad-border rounded-xl p-5">
         <h3 className="text-sm font-semibold text-cad-muted uppercase tracking-wider mb-3">Table Inspector</h3>
+        <p className="text-xs text-cad-muted mb-3">
+          Quick schema lookup for checking column names before saving job source settings.
+        </p>
         <div className="flex flex-wrap gap-2">
           <input
             type="text"
