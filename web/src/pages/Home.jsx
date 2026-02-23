@@ -157,7 +157,7 @@ function WorkspaceHub({ user, departments, isAdmin, onSelectDepartment, onOpenAd
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_8%_10%,rgba(43,127,255,0.18),transparent_36%),radial-gradient(circle_at_94%_8%,rgba(216,180,108,0.14),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0))]" />
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="w-[min(88vw,1200px)] h-[min(88vh,880px)] opacity-[0.09]">
-          <img src="/1080.png" alt="" className="w-full h-full object-contain cad-page-watermark-image" />
+          <img src="/1080.png" alt="" className="w-full h-full object-contain cad-home-watermark-image" />
         </div>
       </div>
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-cad-bg/10 via-transparent to-cad-bg/35" />
@@ -313,7 +313,7 @@ function SetupPrompt({ user }) {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_8%_8%,rgba(88,101,242,0.2),transparent_36%),radial-gradient(circle_at_96%_10%,rgba(216,180,108,0.15),transparent_38%)]" />
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="w-[min(86vw,1100px)] h-[min(82vh,760px)] opacity-[0.09]">
-          <img src="/1080.png" alt="" className="w-full h-full object-contain cad-page-watermark-image" />
+          <img src="/1080.png" alt="" className="w-full h-full object-contain cad-home-watermark-image" />
         </div>
       </div>
 

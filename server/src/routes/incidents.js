@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../auth/middleware');
+const { requireAuth, requireFiveMOnline } = require('../auth/middleware');
 const {
   Incidents,
   IncidentLinks,
@@ -14,6 +14,7 @@ const { audit } = require('../utils/audit');
 const bus = require('../utils/eventBus');
 
 const router = express.Router();
+router.use(requireAuth, requireFiveMOnline);
 
 function isUserInDispatchDepartment(user) {
   const dispatchDepts = Departments.list().filter((d) => d.is_dispatch);
@@ -108,7 +109,7 @@ function resolveRequestedDepartmentIdsForList(user, departmentId, dispatchMode) 
   return Array.from(ids).filter((id) => canAccessDepartment(user, id));
 }
 
-router.get('/', requireAuth, (req, res) => {
+router.get('/', (req, res) => {
   const deptId = Number(req.query?.department_id);
   if (!Number.isInteger(deptId) || deptId <= 0) {
     return res.status(400).json({ error: 'department_id is required' });
@@ -126,7 +127,7 @@ router.get('/', requireAuth, (req, res) => {
   return res.json(incidents);
 });
 
-router.get('/by-entity', requireAuth, (req, res) => {
+router.get('/by-entity', (req, res) => {
   const entityType = normalizeEntityType(req.query?.entity_type);
   const entityId = Number(req.query?.entity_id);
   const deptId = Number(req.query?.department_id);
@@ -142,7 +143,7 @@ router.get('/by-entity', requireAuth, (req, res) => {
   res.json(links);
 });
 
-router.post('/', requireAuth, (req, res) => {
+router.post('/', (req, res) => {
   const departmentId = Number(req.body?.department_id);
   const title = String(req.body?.title || '').trim();
   if (!Number.isInteger(departmentId) || departmentId <= 0) {
@@ -195,7 +196,7 @@ router.post('/', requireAuth, (req, res) => {
   res.status(201).json(created);
 });
 
-router.get('/:id', requireAuth, (req, res) => {
+router.get('/:id', (req, res) => {
   const incident = Incidents.findById(Number(req.params.id), { includeLinks: true });
   if (!incident) return res.status(404).json({ error: 'Incident not found' });
   if (!canAccessIncident(req.user, incident)) {
@@ -204,7 +205,7 @@ router.get('/:id', requireAuth, (req, res) => {
   res.json(incident);
 });
 
-router.patch('/:id', requireAuth, (req, res) => {
+router.patch('/:id', (req, res) => {
   const incident = Incidents.findById(Number(req.params.id), { includeLinks: false });
   if (!incident) return res.status(404).json({ error: 'Incident not found' });
   if (!canAccessIncident(req.user, incident)) {
@@ -229,7 +230,7 @@ router.patch('/:id', requireAuth, (req, res) => {
   res.json(updated);
 });
 
-router.delete('/:id', requireAuth, (req, res) => {
+router.delete('/:id', (req, res) => {
   const incident = Incidents.findById(Number(req.params.id), { includeLinks: false });
   if (!incident) return res.status(404).json({ error: 'Incident not found' });
   if (!canAccessIncident(req.user, incident)) {
@@ -246,7 +247,7 @@ router.delete('/:id', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
-router.post('/:id/links', requireAuth, (req, res) => {
+router.post('/:id/links', (req, res) => {
   const incident = Incidents.findById(Number(req.params.id), { includeLinks: false });
   if (!incident) return res.status(404).json({ error: 'Incident not found' });
   if (!canAccessIncident(req.user, incident)) {
@@ -282,7 +283,7 @@ router.post('/:id/links', requireAuth, (req, res) => {
   res.status(201).json(updated);
 });
 
-router.delete('/:id/links/:linkId', requireAuth, (req, res) => {
+router.delete('/:id/links/:linkId', (req, res) => {
   const incident = Incidents.findById(Number(req.params.id), { includeLinks: false });
   if (!incident) return res.status(404).json({ error: 'Incident not found' });
   if (!canAccessIncident(req.user, incident)) {

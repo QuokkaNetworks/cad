@@ -62,7 +62,7 @@ export default function App() {
             <Route path="/dispatch" element={<RequireDepartment><Dispatch /></RequireDepartment>} />
             <Route path="/units" element={<RequireDepartment><Units /></RequireDepartment>} />
             <Route path="/search" element={<RequireDepartment><Search /></RequireDepartment>} />
-            <Route path="/incidents" element={<RequireDepartment><Incidents /></RequireDepartment>} />
+            <Route path="/incidents" element={<RequireDepartment><RequireFiveMOnline featureLabel="incidents"><Incidents /></RequireFiveMOnline></RequireDepartment>} />
             <Route path="/records" element={<RequireDepartment><RequireFiveMOnline featureLabel="records"><Records /></RequireFiveMOnline></RequireDepartment>} />
             <Route path="/arrest-reports" element={<RequireDepartment><RequireFiveMOnline featureLabel="arrest reports"><ArrestReports /></RequireFiveMOnline></RequireDepartment>} />
             <Route path="/bolos" element={<RequireDepartment><BOLOs /></RequireDepartment>} />

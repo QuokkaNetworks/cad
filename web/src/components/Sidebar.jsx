@@ -50,6 +50,21 @@ const CALL_DETAILS_NAV_ITEM = {
   icon: 'M9 12h6m-6 4h6M8 2h8a2 2 0 012 2v16l-6-3-6 3V4a2 2 0 012-2z',
 };
 
+function requiresFiveMOnlineForNavItem(item) {
+  return item?.to === '/incidents'
+    || item?.to === '/records'
+    || item?.to === '/arrest-reports'
+    || item?.to === '/warrants'
+    || item?.to === '/evidence';
+}
+
+function formatHiddenNavLabels(labels) {
+  if (!Array.isArray(labels) || labels.length === 0) return '';
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
+}
+
 function getNavItemsForLayout(layoutType, activeDepartment) {
   if (activeDepartment?.is_dispatch) return DISPATCH_NAV;
   if (layoutType === DEPARTMENT_LAYOUT.PARAMEDICS) return EMS_NAV;
@@ -290,14 +305,19 @@ export default function Sidebar() {
     },
   });
 
-  const navItems = getNavItemsForLayout(layoutType, activeDepartment).filter((item) => {
+  const baseNavItems = getNavItemsForLayout(layoutType, activeDepartment);
+  const hideInGameProtectedItems = !isFiveMOnline && !activeDepartment?.is_dispatch;
+  const hiddenInGameNavLabels = hideInGameProtectedItems
+    ? baseNavItems
+      .filter((item) => requiresFiveMOnlineForNavItem(item))
+      .map((item) => item.label)
+    : [];
+  const hiddenInGameNavText = formatHiddenNavLabels(hiddenInGameNavLabels);
+
+  const navItems = baseNavItems.filter((item) => {
     const isDispatchTab = item.to === '/units' || item.to === '/dispatch';
     if (!isOnDuty && isDispatchTab) return false;
-    const requiresInGameOnline = item.to === '/records'
-      || item.to === '/arrest-reports'
-      || item.to === '/warrants'
-      || item.to === '/evidence';
-    if (requiresInGameOnline && !isFiveMOnline) return false;
+    if (requiresFiveMOnlineForNavItem(item) && hideInGameProtectedItems) return false;
     return true;
   });
 
@@ -317,11 +337,11 @@ export default function Sidebar() {
             {navWithCallDetails.map(item => (
               <SidebarLink key={item.to} {...item} />
             ))}
-            {!isFiveMOnline && (
+            {hiddenInGameNavLabels.length > 0 && (
               <div className="mt-3 mx-1 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
                 <p className="text-[11px] uppercase tracking-wider text-amber-300">In-Game Required</p>
                 <p className="text-xs text-cad-muted mt-1">
-                  Connect to the FiveM server to access records, arrest reports, warrants, and evidence.
+                  Connect to the FiveM server to access {hiddenInGameNavText} in this {activeDepartment?.is_dispatch ? 'dispatch' : 'department'} workspace.
                 </p>
               </div>
             )}

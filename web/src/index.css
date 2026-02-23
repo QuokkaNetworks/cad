@@ -116,6 +116,13 @@
   filter: grayscale(1) brightness(1.9) contrast(1.08);
 }
 
+.cad-home-watermark-image {
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.14;
+  filter: brightness(1.05) contrast(1.04);
+}
+
 .cad-app-main-overlay {
   position: absolute;
   inset: 0;
