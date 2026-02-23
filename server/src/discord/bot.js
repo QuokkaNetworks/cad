@@ -6,6 +6,7 @@ const {
   UserSubDepartments,
   DiscordRoleMappings,
   SubDepartments,
+  FiveMPlayerLinks,
   FiveMJobSyncJobs,
   Settings,
 } = require('../db/sqlite');
@@ -72,6 +73,39 @@ function getQboxJobSourceFallbackPolicy() {
     customJobSourceConfigured,
     allowPlayersJobFallback: !customJobSourceConfigured,
   };
+}
+
+function getUserCitizenIdCandidates(user) {
+  const seen = new Set();
+  const rows = [];
+  const addCandidate = (value, source) => {
+    const citizenId = String(value || '').trim();
+    if (!citizenId) return;
+    const key = citizenId.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push({ citizen_id: citizenId, source: String(source || '').trim() || 'unknown' });
+  };
+
+  addCandidate(user?.preferred_citizen_id, 'preferred');
+
+  const steamId = String(user?.steam_id || '').trim();
+  if (steamId && FiveMPlayerLinks && typeof FiveMPlayerLinks.findBySteamId === 'function') {
+    const activeLink = FiveMPlayerLinks.findBySteamId(steamId);
+    addCandidate(activeLink?.citizen_id, 'fivem_link');
+  }
+
+  if (FiveMJobSyncJobs && typeof FiveMJobSyncJobs.listDistinctCitizenIdsByUserId === 'function') {
+    const historical = FiveMJobSyncJobs.listDistinctCitizenIdsByUserId(Number(user?.id || 0), 100);
+    for (const row of historical || []) {
+      addCandidate(row?.citizen_id, 'job_sync_history');
+    }
+  } else if (FiveMJobSyncJobs && typeof FiveMJobSyncJobs.findLatestByUserId === 'function') {
+    const latest = FiveMJobSyncJobs.findLatestByUserId(Number(user?.id || 0));
+    addCandidate(latest?.citizen_id, 'job_sync_history_latest');
+  }
+
+  return rows;
 }
 
 function getPeriodicRoleSyncMinutes() {
@@ -249,9 +283,10 @@ async function syncJobRolesFromGame(user, member, mappings) {
     return { enabled: true, changed: false, reason: 'no_job_mappings' };
   }
 
-  const citizenId = String(user.preferred_citizen_id || '').trim();
-  if (!citizenId) {
-    return { enabled: true, changed: false, reason: 'no_preferred_citizen_id' };
+  const citizenIdCandidates = getUserCitizenIdCandidates(user);
+  const seedCitizenIds = citizenIdCandidates.map(row => String(row?.citizen_id || '').trim()).filter(Boolean);
+  if (seedCitizenIds.length === 0) {
+    return { enabled: true, changed: false, reason: 'no_linked_citizen_ids' };
   }
 
   let gameJobs = [];
@@ -259,32 +294,36 @@ async function syncJobRolesFromGame(user, member, mappings) {
   let playersJobFallbackUsed = false;
   try {
     if (typeof qbox.getPlayerCharacterJobsByCitizenId === 'function') {
-      const characterJobs = await qbox.getPlayerCharacterJobsByCitizenId(citizenId);
-      if (Array.isArray(characterJobs)) {
-        gameJobs = characterJobs
-          .map(job => ({
-            name: String(job?.name || '').trim(),
-            grade: normalizeGrade(job?.grade || 0),
-            citizenid: String(job?.citizenid || '').trim(),
-          }))
-          .filter(job => job.name);
+      const aggregatedJobs = [];
+      for (const seedCitizenId of seedCitizenIds) {
+        const characterJobs = await qbox.getPlayerCharacterJobsByCitizenId(seedCitizenId);
+        if (!Array.isArray(characterJobs) || characterJobs.length === 0) continue;
+        aggregatedJobs.push(...characterJobs);
       }
+      gameJobs = aggregatedJobs
+        .map(job => ({
+          name: String(job?.name || '').trim(),
+          grade: normalizeGrade(job?.grade || 0),
+          citizenid: String(job?.citizenid || '').trim(),
+        }))
+        .filter(job => job.name);
     }
     if (gameJobs.length === 0 && fallbackPolicy.allowPlayersJobFallback) {
       playersJobFallbackUsed = true;
-      const gameJob = await qbox.getCharacterJobById(citizenId);
-      const name = String(gameJob?.name || '').trim();
-      if (name) {
-        gameJobs = [{
+      for (const seedCitizenId of seedCitizenIds) {
+        const gameJob = await qbox.getCharacterJobById(seedCitizenId);
+        const name = String(gameJob?.name || '').trim();
+        if (!name) continue;
+        gameJobs.push({
           name,
           grade: normalizeGrade(gameJob?.grade || 0),
-          citizenid: String(gameJob?.citizenid || citizenId || '').trim(),
-        }];
+          citizenid: String(gameJob?.citizenid || seedCitizenId || '').trim(),
+        });
       }
     }
   } catch (err) {
     const msg = String(err?.message || err || 'Unknown QBX lookup error');
-    console.warn(`[Discord] Reverse job role sync lookup failed for user ${user.id} (${citizenId}): ${msg}`);
+    console.warn(`[Discord] Reverse job role sync lookup failed for user ${user.id} (${seedCitizenIds.join(', ') || 'no-cid'}): ${msg}`);
     return { enabled: true, changed: false, reason: 'lookup_failed', error: msg };
   }
 
@@ -334,6 +373,7 @@ async function syncJobRolesFromGame(user, member, mappings) {
       job_grade: primaryJob ? normalizeGrade(primaryJob.grade) : 0,
       job_groups: characterJobsSummary.map(job => ({ job_name: job.job_name, job_grade: job.job_grade })),
       character_jobs: characterJobsSummary,
+      lookup_citizen_ids: seedCitizenIds,
       qbox_job_source_table: fallbackPolicy.jobTable,
       players_job_fallback_used: playersJobFallbackUsed,
       players_job_fallback_allowed: fallbackPolicy.allowPlayersJobFallback,
@@ -364,7 +404,8 @@ async function syncJobRolesFromGame(user, member, mappings) {
   if (addedRoles.length > 0 || removedRoles.length > 0 || errors.length > 0) {
     audit(user.id, 'discord_job_role_sync_from_game', {
       discordId: user.discord_id,
-      citizenId,
+      citizenId: seedCitizenIds[0] || '',
+      lookup_citizen_ids: seedCitizenIds,
       job_name: primaryJob?.name || '',
       job_grade: primaryJob ? normalizeGrade(primaryJob.grade) : 0,
       job_groups: characterJobsSummary.map(job => ({ job_name: job.job_name, job_grade: job.job_grade })),
@@ -386,6 +427,7 @@ async function syncJobRolesFromGame(user, member, mappings) {
     job_grade: primaryJob ? normalizeGrade(primaryJob.grade) : 0,
     job_groups: characterJobsSummary.map(job => ({ job_name: job.job_name, job_grade: job.job_grade })),
     character_jobs: characterJobsSummary,
+    lookup_citizen_ids: seedCitizenIds,
     qbox_job_source_table: fallbackPolicy.jobTable,
     players_job_fallback_used: playersJobFallbackUsed,
     players_job_fallback_allowed: fallbackPolicy.allowPlayersJobFallback,
@@ -630,4 +672,5 @@ module.exports = {
   getGuildRoles,
   getClient,
   refreshPeriodicRoleSync,
+  getUserCitizenIdCandidates,
 };

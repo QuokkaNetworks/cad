@@ -17,6 +17,7 @@ function describePreviewReason(reason) {
   if (!normalized) return '';
   if (normalized === 'ok') return 'Preview loaded';
   if (normalized === 'no_preferred_citizen_id') return 'User has no preferred citizen ID in CAD';
+  if (normalized === 'no_linked_citizen_ids') return 'User has no linked citizen IDs (preferred ID, active FiveM link, or job sync history)';
   if (normalized === 'no_job_mappings') return 'No job role mappings are configured';
   if (normalized === 'no_jobs_detected') return 'No jobs were detected from the configured QBox job source';
   if (normalized === 'no_matching_mappings') return 'Jobs were detected, but none match current job role bindings';
@@ -245,6 +246,14 @@ export default function AdminJobBindings() {
                       <div>Name: <span className="text-cad-ink">{previewResult.user?.steam_name || '-'}</span></div>
                       <div>Discord: <span className="font-mono">{previewResult.user?.discord_id || '-'}</span></div>
                       <div>Preferred CID: <span className="font-mono">{previewResult.user?.preferred_citizen_id || '-'}</span></div>
+                      <div>
+                        Linked CIDs:{' '}
+                        <span className="font-mono">
+                          {Array.isArray(previewResult.user?.linked_citizen_ids) && previewResult.user.linked_citizen_ids.length > 0
+                            ? previewResult.user.linked_citizen_ids.join(', ')
+                            : '-'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div className="bg-cad-surface border border-cad-border rounded p-3">

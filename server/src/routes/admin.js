@@ -6,7 +6,7 @@ const sharp = require('sharp');
 const { requireAuth, requireAdmin } = require('../auth/middleware');
 const {
   Users, Departments, UserDepartments, DiscordRoleMappings,
-  Settings, AuditLog, Announcements, Units, FiveMPlayerLinks, FiveMFineJobs, SubDepartments, OffenceCatalog,
+  Settings, AuditLog, Announcements, Units, FiveMPlayerLinks, FiveMJobSyncJobs, FiveMFineJobs, SubDepartments, OffenceCatalog,
   DriverLicenses, VehicleRegistrations,
 } = require('../db/sqlite');
 const { audit } = require('../utils/audit');
@@ -474,6 +474,29 @@ router.get('/discord/job-sync-preview', async (req, res) => {
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   const preferredCitizenId = String(user.preferred_citizen_id || '').trim();
+  const linkedCitizenIds = (() => {
+    const seen = new Set();
+    const list = [];
+    const add = (value) => {
+      const cid = String(value || '').trim();
+      if (!cid) return;
+      const key = cid.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      list.push(cid);
+    };
+    add(preferredCitizenId);
+    if (String(user.steam_id || '').trim()) {
+      add(FiveMPlayerLinks.findBySteamId(String(user.steam_id || '').trim())?.citizen_id);
+    }
+    if (typeof FiveMJobSyncJobs.listDistinctCitizenIdsByUserId === 'function') {
+      const rows = FiveMJobSyncJobs.listDistinctCitizenIdsByUserId(Number(user.id || 0), 100);
+      for (const row of rows || []) add(row?.citizen_id);
+    } else {
+      add(FiveMJobSyncJobs.findLatestByUserId(Number(user.id || 0))?.citizen_id);
+    }
+    return list;
+  })();
   const reverseEnabled = String(Settings.get('fivem_bridge_job_sync_reverse_enabled') || 'true').trim().toLowerCase() !== 'false';
   const allMappings = DiscordRoleMappings.list();
   const jobMappings = allMappings
@@ -494,6 +517,7 @@ router.get('/discord/job-sync-preview', async (req, res) => {
       steam_name: String(user.steam_name || ''),
       discord_id: String(user.discord_id || ''),
       preferred_citizen_id: preferredCitizenId,
+      linked_citizen_ids: linkedCitizenIds,
     },
     qbox: {
       players_table: String(Settings.get('qbox_players_table') || 'players').trim() || 'players',
@@ -506,6 +530,7 @@ router.get('/discord/job-sync-preview', async (req, res) => {
     reason: '',
     detected_jobs: [],
     matched_mappings: [],
+    lookup_citizen_ids: linkedCitizenIds,
     players_job_fallback_allowed: true,
     players_job_fallback_used: false,
   };
@@ -515,8 +540,8 @@ router.get('/discord/job-sync-preview', async (req, res) => {
 
   if (!reverseEnabled) {
     response.reason = 'reverse_job_role_sync_disabled';
-  } else if (!preferredCitizenId) {
-    response.reason = 'no_preferred_citizen_id';
+  } else if (linkedCitizenIds.length === 0) {
+    response.reason = 'no_linked_citizen_ids';
   } else if (jobMappings.length === 0) {
     response.reason = 'no_job_mappings';
   } else {
@@ -524,9 +549,14 @@ router.get('/discord/job-sync-preview', async (req, res) => {
       let detectedJobs = [];
       let playersJobFallbackUsed = false;
       if (typeof qbox.getPlayerCharacterJobsByCitizenId === 'function') {
-        const rows = await qbox.getPlayerCharacterJobsByCitizenId(preferredCitizenId);
-        if (Array.isArray(rows)) {
-          detectedJobs = rows.map((row) => ({
+        const aggregatedRows = [];
+        for (const seedCitizenId of linkedCitizenIds) {
+          const rows = await qbox.getPlayerCharacterJobsByCitizenId(seedCitizenId);
+          if (!Array.isArray(rows) || rows.length === 0) continue;
+          aggregatedRows.push(...rows);
+        }
+        if (Array.isArray(aggregatedRows) && aggregatedRows.length > 0) {
+          detectedJobs = aggregatedRows.map((row) => ({
             citizen_id: String(row?.citizenid || '').trim(),
             job_name: String(row?.name || '').trim(),
             job_grade: normalizeJobGrade(row?.grade),
@@ -535,15 +565,30 @@ router.get('/discord/job-sync-preview', async (req, res) => {
       }
       if (detectedJobs.length === 0 && response.players_job_fallback_allowed && typeof qbox.getCharacterJobById === 'function') {
         playersJobFallbackUsed = true;
-        const row = await qbox.getCharacterJobById(preferredCitizenId);
-        const name = String(row?.name || '').trim();
-        if (name) {
-          detectedJobs = [{
-            citizen_id: String(row?.citizenid || preferredCitizenId).trim(),
+        for (const seedCitizenId of linkedCitizenIds) {
+          const row = await qbox.getCharacterJobById(seedCitizenId);
+          const name = String(row?.name || '').trim();
+          if (!name) continue;
+          detectedJobs.push({
+            citizen_id: String(row?.citizenid || seedCitizenId).trim(),
             job_name: name,
             job_grade: normalizeJobGrade(row?.grade),
-          }];
+          });
         }
+      }
+      if (detectedJobs.length > 0) {
+        detectedJobs = Array.from(new Map(
+          detectedJobs.map((row) => {
+            const cid = String(row?.citizen_id || '').trim();
+            const jobName = String(row?.job_name || '').trim();
+            const jobGrade = normalizeJobGrade(row?.job_grade);
+            return [`${cid.toLowerCase()}::${jobName.toLowerCase()}::${jobGrade}`, {
+              citizen_id: cid,
+              job_name: jobName,
+              job_grade: jobGrade,
+            }];
+          })
+        ).values()).filter((row) => row.job_name);
       }
       response.players_job_fallback_used = playersJobFallbackUsed;
 

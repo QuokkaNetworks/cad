@@ -2654,6 +2654,22 @@ const FiveMJobSyncJobs = {
       LIMIT 1
     `).get(userId);
   },
+  listDistinctCitizenIdsByUserId(userId, limit = 50) {
+    const parsedUserId = Number(userId);
+    const parsedLimit = Number.isFinite(Number(limit)) ? Math.max(1, Math.trunc(Number(limit))) : 50;
+    if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) return [];
+    return db.prepare(`
+      SELECT
+        MIN(citizen_id) AS citizen_id,
+        MAX(created_at) AS last_seen_at
+      FROM fivem_job_sync_jobs
+      WHERE user_id = ?
+        AND TRIM(COALESCE(citizen_id, '')) <> ''
+      GROUP BY lower(citizen_id)
+      ORDER BY last_seen_at DESC
+      LIMIT ?
+    `).all(parsedUserId, parsedLimit);
+  },
   listPending(limit = 25) {
     return db.prepare(`
       SELECT * FROM fivem_job_sync_jobs
