@@ -62,6 +62,18 @@ function isGameToDiscordJobSyncEnabled() {
   return toBool(Settings.get('fivem_bridge_job_sync_reverse_enabled'), true);
 }
 
+function getQboxJobSourceFallbackPolicy() {
+  const playersTable = String(Settings.get('qbox_players_table') || 'players').trim().toLowerCase();
+  const jobTable = String(Settings.get('qbox_job_table') || Settings.get('qbox_players_table') || 'players').trim().toLowerCase();
+  const customJobSourceConfigured = !!jobTable && jobTable !== playersTable;
+  return {
+    playersTable,
+    jobTable,
+    customJobSourceConfigured,
+    allowPlayersJobFallback: !customJobSourceConfigured,
+  };
+}
+
 function getPeriodicRoleSyncMinutes() {
   const fromSettingsRaw = Settings.get('discord_periodic_sync_minutes');
   const fromSettings = Number(fromSettingsRaw);
@@ -243,6 +255,8 @@ async function syncJobRolesFromGame(user, member, mappings) {
   }
 
   let gameJobs = [];
+  const fallbackPolicy = getQboxJobSourceFallbackPolicy();
+  let playersJobFallbackUsed = false;
   try {
     if (typeof qbox.getPlayerCharacterJobsByCitizenId === 'function') {
       const characterJobs = await qbox.getPlayerCharacterJobsByCitizenId(citizenId);
@@ -256,7 +270,8 @@ async function syncJobRolesFromGame(user, member, mappings) {
           .filter(job => job.name);
       }
     }
-    if (gameJobs.length === 0) {
+    if (gameJobs.length === 0 && fallbackPolicy.allowPlayersJobFallback) {
+      playersJobFallbackUsed = true;
       const gameJob = await qbox.getCharacterJobById(citizenId);
       const name = String(gameJob?.name || '').trim();
       if (name) {
@@ -319,6 +334,9 @@ async function syncJobRolesFromGame(user, member, mappings) {
       job_grade: primaryJob ? normalizeGrade(primaryJob.grade) : 0,
       job_groups: characterJobsSummary.map(job => ({ job_name: job.job_name, job_grade: job.job_grade })),
       character_jobs: characterJobsSummary,
+      qbox_job_source_table: fallbackPolicy.jobTable,
+      players_job_fallback_used: playersJobFallbackUsed,
+      players_job_fallback_allowed: fallbackPolicy.allowPlayersJobFallback,
     };
   }
 
@@ -351,6 +369,9 @@ async function syncJobRolesFromGame(user, member, mappings) {
       job_grade: primaryJob ? normalizeGrade(primaryJob.grade) : 0,
       job_groups: characterJobsSummary.map(job => ({ job_name: job.job_name, job_grade: job.job_grade })),
       character_jobs: characterJobsSummary,
+      qbox_job_source_table: fallbackPolicy.jobTable,
+      players_job_fallback_used: playersJobFallbackUsed,
+      players_job_fallback_allowed: fallbackPolicy.allowPlayersJobFallback,
       added_roles: addedRoles,
       removed_roles: removedRoles,
       errors,
@@ -365,6 +386,9 @@ async function syncJobRolesFromGame(user, member, mappings) {
     job_grade: primaryJob ? normalizeGrade(primaryJob.grade) : 0,
     job_groups: characterJobsSummary.map(job => ({ job_name: job.job_name, job_grade: job.job_grade })),
     character_jobs: characterJobsSummary,
+    qbox_job_source_table: fallbackPolicy.jobTable,
+    players_job_fallback_used: playersJobFallbackUsed,
+    players_job_fallback_allowed: fallbackPolicy.allowPlayersJobFallback,
     added_roles: addedRoles,
     removed_roles: removedRoles,
     errors,

@@ -250,10 +250,20 @@ export default function AdminJobBindings() {
                   <div className="bg-cad-surface border border-cad-border rounded p-3">
                     <div className="text-xs uppercase tracking-wider text-cad-muted mb-2">Job Source Config</div>
                     <div className="space-y-1 text-xs">
+                      <div>Players Table: <span className="font-mono">{previewResult.qbox?.players_table || '-'}</span></div>
                       <div>Table: <span className="font-mono">{previewResult.qbox?.job_table || '-'}</span></div>
                       <div>Match Col: <span className="font-mono">{previewResult.qbox?.job_match_col || '-'}</span></div>
                       <div>Job Col: <span className="font-mono">{previewResult.qbox?.job_col || '-'}</span></div>
                       <div>Grade Col: <span className="font-mono">{previewResult.qbox?.job_grade_col || '(embedded in job column)'}</span></div>
+                      <div>
+                        Players Job Fallback:{' '}
+                        <span className={`font-mono ${previewResult.players_job_fallback_allowed ? 'text-amber-300' : 'text-emerald-400'}`}>
+                          {previewResult.players_job_fallback_allowed ? 'allowed' : 'disabled (custom job table)'}
+                        </span>
+                        {previewResult.players_job_fallback_used ? (
+                          <span className="text-amber-300"> (used in this preview)</span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>

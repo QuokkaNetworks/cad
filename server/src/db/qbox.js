@@ -1011,10 +1011,10 @@ async function getPlayerCharacterJobsByCitizenId(citizenId) {
     }
     rows = Array.from(exactRowsByKey.values());
 
-    // Some job tables store identifiers with inconsistent case/whitespace. If no exact
-    // match rows were found, retry with a normalized string compare.
-    if ((!Array.isArray(rows) || rows.length === 0) && matchCandidates.length > 0) {
-      const normalizedRowsByKey = new Map();
+    // Some job tables store identifiers with inconsistent case/whitespace. Run a normalized
+    // compare as well and merge rows so we don't miss secondary jobs on partially-matching ids.
+    if (matchCandidates.length > 0) {
+      const normalizedRowsByKey = new Map(exactRowsByKey);
       for (const candidate of matchCandidates) {
         if (!candidate) continue;
         const [candidateRows] = await p.query(
@@ -1035,7 +1035,7 @@ async function getPlayerCharacterJobsByCitizenId(citizenId) {
     if (!Array.isArray(rows) || rows.length === 0) {
       try {
         [rows] = await p.query(
-          `SELECT * FROM ${tableNameSql} WHERE ${citizenIdColSql} = ? LIMIT 1`,
+          `SELECT * FROM ${tableNameSql} WHERE ${citizenIdColSql} = ?`,
           [normalizedCitizenId]
         );
       } catch (fallbackErr) {

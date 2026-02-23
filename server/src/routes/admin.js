@@ -496,6 +496,7 @@ router.get('/discord/job-sync-preview', async (req, res) => {
       preferred_citizen_id: preferredCitizenId,
     },
     qbox: {
+      players_table: String(Settings.get('qbox_players_table') || 'players').trim() || 'players',
       job_table: String(Settings.get('qbox_job_table') || Settings.get('qbox_players_table') || 'players').trim() || 'players',
       job_match_col: String(Settings.get('qbox_job_match_col') || 'license').trim() || 'license',
       job_col: String(Settings.get('qbox_job_col') || 'job').trim() || 'job',
@@ -505,7 +506,12 @@ router.get('/discord/job-sync-preview', async (req, res) => {
     reason: '',
     detected_jobs: [],
     matched_mappings: [],
+    players_job_fallback_allowed: true,
+    players_job_fallback_used: false,
   };
+  const playersTableKey = String(response.qbox.players_table || '').trim().toLowerCase();
+  const jobTableKey = String(response.qbox.job_table || '').trim().toLowerCase();
+  response.players_job_fallback_allowed = !!playersTableKey && !!jobTableKey && playersTableKey === jobTableKey;
 
   if (!reverseEnabled) {
     response.reason = 'reverse_job_role_sync_disabled';
@@ -516,6 +522,7 @@ router.get('/discord/job-sync-preview', async (req, res) => {
   } else {
     try {
       let detectedJobs = [];
+      let playersJobFallbackUsed = false;
       if (typeof qbox.getPlayerCharacterJobsByCitizenId === 'function') {
         const rows = await qbox.getPlayerCharacterJobsByCitizenId(preferredCitizenId);
         if (Array.isArray(rows)) {
@@ -526,7 +533,8 @@ router.get('/discord/job-sync-preview', async (req, res) => {
           })).filter((row) => row.job_name);
         }
       }
-      if (detectedJobs.length === 0 && typeof qbox.getCharacterJobById === 'function') {
+      if (detectedJobs.length === 0 && response.players_job_fallback_allowed && typeof qbox.getCharacterJobById === 'function') {
+        playersJobFallbackUsed = true;
         const row = await qbox.getCharacterJobById(preferredCitizenId);
         const name = String(row?.name || '').trim();
         if (name) {
@@ -537,6 +545,7 @@ router.get('/discord/job-sync-preview', async (req, res) => {
           }];
         }
       }
+      response.players_job_fallback_used = playersJobFallbackUsed;
 
       response.detected_jobs = detectedJobs;
       if (detectedJobs.length === 0) {
