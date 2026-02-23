@@ -3,7 +3,10 @@ const { requireAuth } = require('../auth/middleware');
 const { Warrants } = require('../db/sqlite');
 const { audit } = require('../utils/audit');
 const bus = require('../utils/eventBus');
-const { notifyWarrantCommunityPoster } = require('../utils/warrantCommunityPoster');
+const {
+  notifyWarrantCommunityPoster,
+  deleteWarrantCommunityPosterMessage,
+} = require('../utils/warrantCommunityPoster');
 
 const router = express.Router();
 
@@ -68,6 +71,13 @@ router.patch('/:id/serve', requireAuth, (req, res) => {
   Warrants.updateStatus(warrant.id, 'served');
   audit(req.user.id, 'warrant_served', { warrantId: warrant.id });
   bus.emit('warrant:serve', { departmentId: warrant.department_id, warrantId: warrant.id });
+
+  setImmediate(() => {
+    deleteWarrantCommunityPosterMessage(warrant.id).catch((err) => {
+      console.warn(`[Warrants] Failed to delete community wanted message for warrant #${warrant.id} (served): ${err?.message || err}`);
+    });
+  });
+
   res.json({ success: true });
 });
 
@@ -79,6 +89,13 @@ router.patch('/:id/cancel', requireAuth, (req, res) => {
   Warrants.updateStatus(warrant.id, 'cancelled');
   audit(req.user.id, 'warrant_cancelled', { warrantId: warrant.id });
   bus.emit('warrant:cancel', { departmentId: warrant.department_id, warrantId: warrant.id });
+
+  setImmediate(() => {
+    deleteWarrantCommunityPosterMessage(warrant.id).catch((err) => {
+      console.warn(`[Warrants] Failed to delete community wanted message for warrant #${warrant.id} (cancelled): ${err?.message || err}`);
+    });
+  });
+
   res.json({ success: true });
 });
 

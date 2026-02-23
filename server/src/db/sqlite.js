@@ -1463,6 +1463,70 @@ const Warrants = {
   },
 };
 
+// --- Warrant community Discord messages ---
+const WarrantCommunityMessages = {
+  findByWarrantId(warrantId) {
+    const id = Number(warrantId);
+    if (!Number.isInteger(id) || id <= 0) return null;
+    return db.prepare('SELECT * FROM warrant_community_messages WHERE warrant_id = ?').get(id);
+  },
+  upsert({ warrant_id, discord_message_id, webhook_url, status = 'posted', last_error = '' }) {
+    const warrantId = Number(warrant_id);
+    if (!Number.isInteger(warrantId) || warrantId <= 0) return null;
+    const messageId = String(discord_message_id || '').trim();
+    const webhook = String(webhook_url || '').trim();
+    const normalizedStatus = ['posted', 'deleted', 'delete_failed'].includes(String(status || '').trim())
+      ? String(status || '').trim()
+      : 'posted';
+    db.prepare(`
+      INSERT INTO warrant_community_messages (
+        warrant_id, discord_message_id, webhook_url, status, last_error, posted_at, deleted_at, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, datetime('now'), NULL, datetime('now'), datetime('now'))
+      ON CONFLICT(warrant_id) DO UPDATE SET
+        discord_message_id = excluded.discord_message_id,
+        webhook_url = excluded.webhook_url,
+        status = excluded.status,
+        last_error = excluded.last_error,
+        posted_at = CASE
+          WHEN excluded.status = 'posted' THEN datetime('now')
+          ELSE warrant_community_messages.posted_at
+        END,
+        deleted_at = CASE
+          WHEN excluded.status = 'posted' THEN NULL
+          ELSE warrant_community_messages.deleted_at
+        END,
+        updated_at = datetime('now')
+    `).run(
+      warrantId,
+      messageId,
+      webhook,
+      normalizedStatus,
+      String(last_error || '').slice(0, 500)
+    );
+    return this.findByWarrantId(warrantId);
+  },
+  markDeleted(warrantId) {
+    const id = Number(warrantId);
+    if (!Number.isInteger(id) || id <= 0) return null;
+    db.prepare(`
+      UPDATE warrant_community_messages
+      SET status = 'deleted', last_error = '', deleted_at = datetime('now'), updated_at = datetime('now')
+      WHERE warrant_id = ?
+    `).run(id);
+    return this.findByWarrantId(id);
+  },
+  markDeleteFailed(warrantId, error) {
+    const id = Number(warrantId);
+    if (!Number.isInteger(id) || id <= 0) return null;
+    db.prepare(`
+      UPDATE warrant_community_messages
+      SET status = 'delete_failed', last_error = ?, updated_at = datetime('now')
+      WHERE warrant_id = ?
+    `).run(String(error || '').slice(0, 500), id);
+    return this.findByWarrantId(id);
+  },
+};
+
 // --- Offence Catalog ---
 const OffenceCatalog = {
   list(activeOnly = false) {
@@ -3051,6 +3115,7 @@ module.exports = {
   ShiftNotes,
   Bolos,
   Warrants,
+  WarrantCommunityMessages,
   OffenceCatalog,
   CriminalRecords,
   PatientAnalyses,

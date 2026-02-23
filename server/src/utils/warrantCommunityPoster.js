@@ -3,7 +3,7 @@ const fsp = require('fs/promises');
 const path = require('path');
 const sharp = require('sharp');
 const config = require('../config');
-const { DriverLicenses, Warrants, Settings } = require('../db/sqlite');
+const { DriverLicenses, Warrants, WarrantCommunityMessages, Settings } = require('../db/sqlite');
 
 const POSTER_WIDTH = 1080;
 const POSTER_HEIGHT = 1350;
@@ -22,7 +22,7 @@ const TEMPLATE_TEXT_LAYOUT = Object.freeze({
   gapY: 140,
   nameValueOffsetY: 78,
   locationValueOffsetY: 78,
-  warrantCountValueOffsetY: 78,
+  warrantCountValueOffsetY: 102,
   wantedForValueOffsetY: 92,
   nameFontSize: 38,
   locationFontSize: 38,
@@ -329,8 +329,8 @@ function buildTemplatePlaceholderPhotoSvg() {
   const width = PHOTO_FRAME.width - 12;
   const height = PHOTO_FRAME.height - 12;
   const centerX = Math.round(width / 2);
-  const headY = 186;
-  const torsoY = 302;
+  const headY = 220;
+  const torsoY = 338;
 
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
@@ -347,8 +347,8 @@ function buildTemplatePlaceholderPhotoSvg() {
     `<rect x="0" y="0" width="${width}" height="${height}" rx="${Math.max(8, PHOTO_FRAME.radius - 4)}" fill="url(#bgFade)" />`,
     `<circle cx="${centerX}" cy="${headY}" r="92" fill="url(#sil)" stroke="rgba(255,255,255,0.18)" stroke-width="3" />`,
     `<path d="M ${centerX - 136} ${torsoY} C ${centerX - 136} ${torsoY - 78}, ${centerX - 80} ${torsoY - 120}, ${centerX} ${torsoY - 120} C ${centerX + 80} ${torsoY - 120}, ${centerX + 136} ${torsoY - 78}, ${centerX + 136} ${torsoY} L ${centerX + 136} ${torsoY + 184} Q ${centerX + 136} ${torsoY + 214}, ${centerX + 106} ${torsoY + 214} L ${centerX - 106} ${torsoY + 214} Q ${centerX - 136} ${torsoY + 214}, ${centerX - 136} ${torsoY + 184} Z" fill="url(#sil)" stroke="rgba(255,255,255,0.15)" stroke-width="3" />`,
-    `<rect x="${centerX - 148}" y="${height - 154}" width="296" height="68" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.12)" stroke-width="2" />`,
-    `<text x="${centerX}" y="${height - 112}" text-anchor="middle" fill="${TEXT_COLORS.muted}" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" letter-spacing="0.5">No licence photo</text>`,
+    `<rect x="${centerX - 148}" y="${height - 124}" width="296" height="68" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.12)" stroke-width="2" />`,
+    `<text x="${centerX}" y="${height - 82}" text-anchor="middle" fill="${TEXT_COLORS.muted}" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" letter-spacing="0.5">No licence photo</text>`,
     `</svg>`,
   ].join('');
 }
@@ -516,11 +516,20 @@ function getPosterLocationLabel() {
 }
 
 async function sendDiscordWebhookWithImage(webhookUrl, payload, pngBuffer) {
+  let executeUrl = webhookUrl;
+  try {
+    const parsed = new URL(String(webhookUrl || '').trim());
+    parsed.searchParams.set('wait', 'true');
+    executeUrl = parsed.toString();
+  } catch {
+    executeUrl = String(webhookUrl || '').trim();
+  }
+
   const form = new FormData();
   form.append('payload_json', JSON.stringify(payload));
   form.append('files[0]', new Blob([pngBuffer], { type: 'image/png' }), 'wanted-poster.png');
 
-  const res = await fetch(webhookUrl, {
+  const res = await fetch(executeUrl, {
     method: 'POST',
     body: form,
     signal: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
@@ -532,6 +541,53 @@ async function sendDiscordWebhookWithImage(webhookUrl, payload, pngBuffer) {
     const text = await res.text().catch(() => '');
     throw new Error(`Discord webhook failed (${res.status}): ${text.slice(0, 300)}`);
   }
+
+  const text = await res.text().catch(() => '');
+  if (!text) return { ok: true, message_id: '' };
+  try {
+    const json = JSON.parse(text);
+    return { ok: true, message_id: String(json?.id || '').trim(), raw: json };
+  } catch {
+    return { ok: true, message_id: '' };
+  }
+}
+
+function buildWebhookMessageDeleteUrl(webhookUrl, messageId) {
+  const parsed = new URL(String(webhookUrl || '').trim());
+  parsed.search = '';
+  const basePath = String(parsed.pathname || '').replace(/\/+$/, '');
+  parsed.pathname = `${basePath}/messages/${encodeURIComponent(String(messageId || '').trim())}`;
+  return parsed.toString();
+}
+
+async function deleteDiscordWebhookMessage(webhookUrl, messageId) {
+  const targetUrl = buildWebhookMessageDeleteUrl(webhookUrl, messageId);
+  const res = await fetch(targetUrl, {
+    method: 'DELETE',
+    signal: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+      ? AbortSignal.timeout(12_000)
+      : undefined,
+  });
+
+  if (res.ok) {
+    return { ok: true, deleted: true };
+  }
+
+  const text = await res.text().catch(() => '');
+  let discordCode = null;
+  try {
+    const json = text ? JSON.parse(text) : null;
+    discordCode = Number(json?.code || 0) || null;
+  } catch {
+    discordCode = null;
+  }
+
+  // Unknown Message: treat as already gone.
+  if (res.status === 404 && discordCode === 10008) {
+    return { ok: true, deleted: true, already_missing: true };
+  }
+
+  throw new Error(`Discord webhook delete failed (${res.status}): ${text.slice(0, 300)}`);
 }
 
 async function notifyWarrantCommunityPoster(warrant) {
@@ -561,7 +617,17 @@ async function notifyWarrantCommunityPoster(warrant) {
 
   const payload = buildWebhookPayload();
 
-  await sendDiscordWebhookWithImage(webhookUrl, payload, posterBuffer);
+  const sendResult = await sendDiscordWebhookWithImage(webhookUrl, payload, posterBuffer);
+  const messageId = String(sendResult?.message_id || '').trim();
+  if (messageId) {
+    WarrantCommunityMessages.upsert({
+      warrant_id: Number(warrant.id),
+      discord_message_id: messageId,
+      webhook_url: webhookUrl,
+      status: 'posted',
+      last_error: '',
+    });
+  }
 
   return {
     skipped: false,
@@ -569,6 +635,7 @@ async function notifyWarrantCommunityPoster(warrant) {
     citizen_id: citizenId || '',
     warrant_count: warrantCount,
     has_mugshot: !!mugshot.hasPhoto,
+    discord_message_id: messageId,
   };
 }
 
@@ -596,17 +663,53 @@ async function sendTestWarrantCommunityPoster() {
 
   const payload = buildWebhookPayload();
 
-  await sendDiscordWebhookWithImage(webhookUrl, payload, posterBuffer);
+  const sendResult = await sendDiscordWebhookWithImage(webhookUrl, payload, posterBuffer);
 
   return {
     skipped: false,
     tested: true,
     location,
+    discord_message_id: String(sendResult?.message_id || '').trim(),
   };
+}
+
+async function deleteWarrantCommunityPosterMessage(warrantId) {
+  const id = Number(warrantId);
+  if (!Number.isInteger(id) || id <= 0) {
+    return { skipped: true, reason: 'invalid_warrant_id' };
+  }
+
+  const record = WarrantCommunityMessages.findByWarrantId(id);
+  if (!record) {
+    return { skipped: true, reason: 'no_stored_message' };
+  }
+
+  const messageId = String(record.discord_message_id || '').trim();
+  const webhookUrl = String(record.webhook_url || '').trim();
+  if (!messageId || !webhookUrl) {
+    WarrantCommunityMessages.markDeleteFailed(id, 'Missing stored webhook_url or discord_message_id');
+    return { skipped: true, reason: 'missing_message_fields' };
+  }
+
+  try {
+    const result = await deleteDiscordWebhookMessage(webhookUrl, messageId);
+    WarrantCommunityMessages.markDeleted(id);
+    return {
+      skipped: false,
+      warrant_id: id,
+      discord_message_id: messageId,
+      deleted: true,
+      already_missing: !!result?.already_missing,
+    };
+  } catch (err) {
+    WarrantCommunityMessages.markDeleteFailed(id, err?.message || err);
+    throw err;
+  }
 }
 
 module.exports = {
   notifyWarrantCommunityPoster,
   renderWantedPoster,
   sendTestWarrantCommunityPoster,
+  deleteWarrantCommunityPosterMessage,
 };
