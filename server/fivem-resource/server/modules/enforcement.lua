@@ -2338,6 +2338,408 @@ CreateThread(function()
   end
 end)
 
+local jailInventorySnapshotsBySource = {}
+
+local function cloneInventoryValue(value, depth)
+  if type(value) ~= 'table' then return value end
+  local nextDepth = (tonumber(depth) or 0) + 1
+  if nextDepth > 8 then return {} end
+  local out = {}
+  for key, nested in pairs(value) do
+    local nestedType = type(nested)
+    if nestedType ~= 'function' and nestedType ~= 'userdata' and nestedType ~= 'thread' then
+      out[key] = cloneInventoryValue(nested, nextDepth)
+    end
+  end
+  return out
+end
+
+local function isJailInventoryManagementEnabled()
+  if type(Config) ~= 'table' then return true end
+  local enabled = Config.CadBridgeJailManageInventory
+  if enabled == nil then return true end
+  return enabled == true
+end
+
+local function getQbxPlayerForInventory(sourceId)
+  if GetResourceState('qbx_core') ~= 'started' then return nil end
+  local ok, player = pcall(function()
+    return exports.qbx_core:GetPlayer(sourceId)
+  end)
+  if ok and player then return player end
+  return nil
+end
+
+local function getQbPlayerForInventory(sourceId)
+  if GetResourceState('qb-core') ~= 'started' then return nil end
+  local ok, core = pcall(function()
+    return exports['qb-core']:GetCoreObject()
+  end)
+  if not ok or not core or not core.Functions or type(core.Functions.GetPlayer) ~= 'function' then
+    return nil
+  end
+  local player = core.Functions.GetPlayer(sourceId)
+  if player then return player end
+  return nil
+end
+
+local function normalizeInventorySnapshotItems(rawItems)
+  local out = {}
+  if type(rawItems) ~= 'table' then return out end
+  for key, item in pairs(rawItems) do
+    if type(item) == 'table' then
+      local name = trim(item.name or item.item or item.id or item.slotName or '')
+      local amount = math.max(0, math.floor(tonumber(item.amount or item.count or item.qty or 0) or 0))
+      if name ~= '' and amount > 0 then
+        local slot = tonumber(item.slot or item.slotId or key)
+        local normalizedItem = {
+          name = name,
+          amount = amount,
+          slot = slot and math.max(1, math.floor(slot)) or nil,
+          info = type(item.info) == 'table' and cloneInventoryValue(item.info) or nil,
+          metadata = type(item.metadata) == 'table' and cloneInventoryValue(item.metadata) or nil,
+        }
+        out[#out + 1] = normalizedItem
+      end
+    end
+  end
+  table.sort(out, function(a, b)
+    local aSlot = tonumber(a and a.slot) or 99999
+    local bSlot = tonumber(b and b.slot) or 99999
+    if aSlot ~= bSlot then return aSlot < bSlot end
+    return trim(a and a.name or '') < trim(b and b.name or '')
+  end)
+  return out
+end
+
+local function getSnapshotItemsFromPlayerData(player)
+  if type(player) ~= 'table' then return nil end
+  local playerData = type(player.PlayerData) == 'table' and player.PlayerData or nil
+  if type(playerData) ~= 'table' then return nil end
+  if type(playerData.items) ~= 'table' then return {} end
+  return normalizeInventorySnapshotItems(playerData.items)
+end
+
+local function getSnapshotItemsFromOxInventory(sourceId)
+  if GetResourceState('ox_inventory') ~= 'started' then return nil end
+
+  local okItems, items = pcall(function()
+    return exports.ox_inventory:GetInventoryItems(sourceId)
+  end)
+  if okItems and type(items) == 'table' then
+    return normalizeInventorySnapshotItems(items)
+  end
+
+  local okInv, inv = pcall(function()
+    return exports.ox_inventory:GetInventory(sourceId)
+  end)
+  if okInv and type(inv) == 'table' then
+    if type(inv.items) == 'table' then
+      return normalizeInventorySnapshotItems(inv.items)
+    end
+    return normalizeInventorySnapshotItems(inv)
+  end
+
+  return nil
+end
+
+local function clearInventoryForJail(sourceId, playerObject)
+  if type(Config) == 'table' and type(Config.CadBridgeJailInventoryClear) == 'function' then
+    local ok, result, err = pcall(function()
+      return Config.CadBridgeJailInventoryClear(sourceId)
+    end)
+    if ok and result ~= false then return true, '' end
+    return false, trim(err or (not ok and result) or 'Custom inventory clear callback failed')
+  end
+
+  if type(playerObject) == 'table' then
+    if type(playerObject.Functions) == 'table' and type(playerObject.Functions.ClearInventory) == 'function' then
+      local ok, result = pcall(function()
+        return playerObject.Functions.ClearInventory()
+      end)
+      if ok and result ~= false then return true, '' end
+    end
+    if type(playerObject.ClearInventory) == 'function' then
+      local ok, result = pcall(function()
+        return playerObject:ClearInventory()
+      end)
+      if ok and result ~= false then return true, '' end
+    end
+  end
+
+  local exportAttempts = {
+    {
+      resource = 'ox_inventory',
+      fn = function()
+        return exports.ox_inventory:ClearInventory(sourceId)
+      end,
+    },
+    {
+      resource = 'qb-inventory',
+      fn = function()
+        return exports['qb-inventory']:ClearInventory(sourceId)
+      end,
+    },
+    {
+      resource = 'ps-inventory',
+      fn = function()
+        return exports['ps-inventory']:ClearInventory(sourceId)
+      end,
+    },
+    {
+      resource = 'lj-inventory',
+      fn = function()
+        return exports['lj-inventory']:ClearInventory(sourceId)
+      end,
+    },
+  }
+
+  for _, attempt in ipairs(exportAttempts) do
+    if GetResourceState(attempt.resource) == 'started' then
+      local ok, result = pcall(attempt.fn)
+      if ok and result ~= false then return true, '' end
+    end
+  end
+
+  return false, 'No supported inventory clear adapter available'
+end
+
+local function getJailInventoryAddMetadata(item)
+  if type(item) ~= 'table' then return {} end
+  if type(item.metadata) == 'table' then return cloneInventoryValue(item.metadata) end
+  if type(item.info) == 'table' then return cloneInventoryValue(item.info) end
+  return {}
+end
+
+local function addInventoryItemForJailRestore(sourceId, item, playerObject)
+  if type(item) ~= 'table' then return false, 'invalid_item' end
+  local name = trim(item.name or '')
+  local amount = math.max(0, math.floor(tonumber(item.amount or 0) or 0))
+  if name == '' or amount <= 0 then return false, 'invalid_item_payload' end
+  local slot = tonumber(item.slot)
+  local metadata = getJailInventoryAddMetadata(item)
+
+  if type(playerObject) == 'table' then
+    if type(playerObject.Functions) == 'table' and type(playerObject.Functions.AddItem) == 'function' then
+      local attempts = {
+        function() return playerObject.Functions.AddItem(name, amount, slot and math.floor(slot) or false, metadata) end,
+        function() return playerObject.Functions.AddItem(name, amount, false, metadata) end,
+        function() return playerObject.Functions.AddItem(name, amount, metadata, slot and math.floor(slot) or false) end,
+        function() return playerObject.Functions.AddItem(name, amount) end,
+      }
+      for _, fn in ipairs(attempts) do
+        local ok, result = pcall(fn)
+        if ok and result ~= false then return true, '' end
+      end
+    end
+
+    if type(playerObject.AddItem) == 'function' then
+      local attempts = {
+        function() return playerObject:AddItem(name, amount, slot and math.floor(slot) or false, metadata) end,
+        function() return playerObject:AddItem(name, amount, metadata) end,
+      }
+      for _, fn in ipairs(attempts) do
+        local ok, result = pcall(fn)
+        if ok and result ~= false then return true, '' end
+      end
+    end
+  end
+
+  if GetResourceState('ox_inventory') == 'started' then
+    local ok, result = pcall(function()
+      return exports.ox_inventory:AddItem(sourceId, name, amount, metadata, slot and math.floor(slot) or nil)
+    end)
+    if ok and result ~= false then return true, '' end
+  end
+
+  local exportAddAttempts = {
+    {
+      resource = 'qb-inventory',
+      fn = function()
+        return exports['qb-inventory']:AddItem(sourceId, name, amount, slot and math.floor(slot) or false, metadata)
+      end,
+    },
+    {
+      resource = 'ps-inventory',
+      fn = function()
+        return exports['ps-inventory']:AddItem(sourceId, name, amount, slot and math.floor(slot) or false, metadata)
+      end,
+    },
+    {
+      resource = 'lj-inventory',
+      fn = function()
+        return exports['lj-inventory']:AddItem(sourceId, name, amount, slot and math.floor(slot) or false, metadata)
+      end,
+    },
+  }
+
+  for _, attempt in ipairs(exportAddAttempts) do
+    if GetResourceState(attempt.resource) == 'started' then
+      local ok, result = pcall(attempt.fn)
+      if ok and result ~= false then return true, '' end
+    end
+  end
+
+  return false, ('No supported inventory restore adapter for item %s'):format(name)
+end
+
+local function captureAndClearJailInventory(sourceId, citizenId, context)
+  if not isJailInventoryManagementEnabled() then
+    return true, 'disabled'
+  end
+  local s = tonumber(sourceId) or 0
+  if s <= 0 then return false, 'invalid_source' end
+
+  local existing = jailInventorySnapshotsBySource[s]
+  if type(existing) == 'table' and existing.restored ~= true then
+    return true, 'already_captured'
+  end
+
+  if type(Config) == 'table' and type(Config.CadBridgeJailInventoryCaptureAndClear) == 'function' then
+    local ok, snapshot, err = pcall(function()
+      return Config.CadBridgeJailInventoryCaptureAndClear(s, trim(citizenId or ''), context or {})
+    end)
+    if not ok then
+      return false, ('Custom inventory capture/clear callback failed: %s'):format(tostring(snapshot))
+    end
+    if snapshot == false then
+      return false, trim(err or 'Custom inventory capture/clear callback returned false')
+    end
+    local normalizedSnapshot = normalizeInventorySnapshotItems(type(snapshot) == 'table' and snapshot or {})
+    jailInventorySnapshotsBySource[s] = {
+      source_id = s,
+      citizen_id = trim(citizenId or ''),
+      items = normalizedSnapshot,
+      captured_at_ms = nowMs(),
+      restored = false,
+      adapter = 'custom',
+    }
+    return true, ''
+  end
+
+  local playerObject = getQbxPlayerForInventory(s)
+  if not playerObject then
+    playerObject = getQbPlayerForInventory(s)
+  end
+
+  local snapshotItems = getSnapshotItemsFromPlayerData(playerObject)
+  local adapterLabel = playerObject and 'framework_player' or ''
+  if snapshotItems == nil then
+    snapshotItems = getSnapshotItemsFromOxInventory(s)
+    if snapshotItems ~= nil then
+      adapterLabel = 'ox_inventory'
+    end
+  end
+  if snapshotItems == nil then
+    return false, 'No supported inventory snapshot adapter available'
+  end
+
+  local cleared, clearErr = clearInventoryForJail(s, playerObject)
+  if not cleared then
+    return false, clearErr or 'Inventory clear failed'
+  end
+
+  jailInventorySnapshotsBySource[s] = {
+    source_id = s,
+    citizen_id = trim(citizenId or ''),
+    items = snapshotItems,
+    captured_at_ms = nowMs(),
+    restored = false,
+    adapter = adapterLabel,
+  }
+  return true, ''
+end
+
+local function restoreJailInventoryForSource(sourceId, citizenId, context)
+  if not isJailInventoryManagementEnabled() then
+    return true, 'disabled'
+  end
+  local s = tonumber(sourceId) or 0
+  if s <= 0 then return false, 'invalid_source' end
+
+  local snapshot = jailInventorySnapshotsBySource[s]
+  if type(snapshot) ~= 'table' then
+    return false, 'no_snapshot'
+  end
+
+  local expectedCitizen = trim(citizenId or '')
+  local storedCitizen = trim(snapshot.citizen_id or '')
+  if expectedCitizen ~= '' and storedCitizen ~= '' then
+    local normalizedExpected = type(normalizeCitizenId) == 'function' and normalizeCitizenId(expectedCitizen) or expectedCitizen:lower()
+    local normalizedStored = type(normalizeCitizenId) == 'function' and normalizeCitizenId(storedCitizen) or storedCitizen:lower()
+    if normalizedExpected ~= normalizedStored then
+      return false, 'citizen_mismatch'
+    end
+  end
+
+  if type(Config) == 'table' and type(Config.CadBridgeJailInventoryRestore) == 'function' then
+    local ok, result, err = pcall(function()
+      return Config.CadBridgeJailInventoryRestore(s, storedCitizen, cloneInventoryValue(snapshot.items), context or {})
+    end)
+    if not ok then
+      return false, ('Custom inventory restore callback failed: %s'):format(tostring(result))
+    end
+    if result == false then
+      return false, trim(err or 'Custom inventory restore callback returned false')
+    end
+    jailInventorySnapshotsBySource[s] = nil
+    return true, ''
+  end
+
+  local playerObject = getQbxPlayerForInventory(s)
+  if not playerObject then
+    playerObject = getQbPlayerForInventory(s)
+  end
+
+  local _clearedBeforeRestore = clearInventoryForJail(s, playerObject)
+  local restoreErrors = {}
+  local restoredCount = 0
+  for _, item in ipairs(type(snapshot.items) == 'table' and snapshot.items or {}) do
+    local ok, err = addInventoryItemForJailRestore(s, item, playerObject)
+    if ok then
+      restoredCount = restoredCount + 1
+    else
+      restoreErrors[#restoreErrors + 1] = tostring(err or ('failed:' .. tostring(item.name or '?')))
+    end
+  end
+
+  if #restoreErrors > 0 then
+    return false, ('restore_failed (%s restored, %s errors): %s')
+      :format(tostring(restoredCount), tostring(#restoreErrors), table.concat(restoreErrors, '; '))
+  end
+
+  jailInventorySnapshotsBySource[s] = nil
+  return true, ''
+end
+
+RegisterNetEvent('cad_bridge:jailInventoryRestoreRequest', function(payload)
+  local src = tonumber(source) or 0
+  if src <= 0 then return end
+
+  local currentCitizen = trim(getCitizenId(src) or '')
+  local requestedCitizen = trim(type(payload) == 'table' and (payload.citizen_id or payload.citizenId) or '')
+  local citizenForRestore = currentCitizen ~= '' and currentCitizen or requestedCitizen
+
+  local ok, err = restoreJailInventoryForSource(src, citizenForRestore, type(payload) == 'table' and payload or {})
+  if not ok then
+    if err ~= 'no_snapshot' and err ~= 'disabled' then
+      print(('[cad_bridge] Jail inventory restore failed for source %s (cid=%s): %s')
+        :format(tostring(src), tostring(citizenForRestore), tostring(err)))
+      notifyAlert(src, 'CAD Jail', 'Inventory could not be restored automatically. Contact staff.', 'warning')
+    end
+    return
+  end
+
+  notifyAlert(src, 'CAD Jail', 'Your inventory has been restored.', 'success')
+end)
+
+AddEventHandler('playerDropped', function(_reason)
+  local src = tonumber(source) or 0
+  if src > 0 then
+    jailInventorySnapshotsBySource[src] = nil
+  end
+end)
+
 local function applyJail(job)
   local adapter = trim(Config.JailAdapter or 'wasabi'):lower()
   if adapter == '' then adapter = 'wasabi' end
@@ -2370,6 +2772,17 @@ local function applyJail(job)
       spawnPoints = Config.CadBridgeJailSpawnPoints
     elseif type(Config.Spawns) == 'table' and #Config.Spawns > 0 then
       spawnPoints = Config.Spawns
+    end
+
+    local inventoryOk, inventoryErr = captureAndClearJailInventory(sourceId, citizenId, {
+      citizen_id = citizenId,
+      jail_minutes = minutes,
+      reason = reason,
+      job_id = tonumber(job and job.id) or 0,
+    })
+    if not inventoryOk and trim(inventoryErr or '') ~= '' then
+      print(('[cad_bridge] Jail inventory capture/clear failed for source %s (cid=%s): %s')
+        :format(tostring(sourceId), tostring(citizenId), tostring(inventoryErr)))
     end
 
     TriggerClientEvent('cad_bridge:jailSentenceStart', sourceId, {

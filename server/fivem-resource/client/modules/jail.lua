@@ -350,7 +350,7 @@ local function intakeTransitionToSpawn(spawnPoint)
   end
 
   applyPrisonOutfitIfEnabled()
-  playJailSpawnEmote(point.emote)
+  stopJailSpawnEmote()
   Wait(150)
   fadeInFromBlack(500)
   return true
@@ -397,6 +397,15 @@ local function closeJailReleasePopup()
 end
 ui.closeJailReleasePopup = closeJailReleasePopup
 
+local function requestInventoryRestoreForActiveSentence()
+  if type(activeSentence) ~= 'table' then return end
+  TriggerServerEvent('cad_bridge:jailInventoryRestoreRequest', {
+    citizen_id = trim(activeSentence.citizenId or ''),
+    reason = trim(activeSentence.reason or ''),
+    jail_minutes = math.max(0, math.floor(tonumber(activeSentence.minutes or 0) or 0)),
+  })
+end
+
 local function buildReleaseUiPayload()
   if type(activeSentence) ~= 'table' then return nil end
   local options = {}
@@ -423,6 +432,7 @@ local function openJailReleasePopup()
   if not payload or type(payload.options) ~= 'table' or #payload.options == 0 then
     local first = normalizeVec4Point({ x = 1850.7, y = 2585.69, z = 44.67, w = 270.25, label = 'Bolingbroke Main Gate' })
     if first then
+      requestInventoryRestoreForActiveSentence()
       teleportPlayerToVec4(first)
       activeSentence.released = true
       activeSentence.completed = true
@@ -457,6 +467,7 @@ local function normalizeSentencePayload(payload)
   return {
     minutes = minutes,
     reason = reason,
+    citizenId = trim(data.citizen_id or data.citizenId or ''),
     releasePoints = releasePoints,
     spawnPoints = spawnPoints,
     startAtMs = nowMs(),
@@ -499,6 +510,7 @@ local function releaseFromJailByIndex(index)
 
   stopJailSpawnEmote()
   callConfigResetClothing()
+  requestInventoryRestoreForActiveSentence()
   teleportPlayerToVec4(point)
   activeSentence.released = true
   activeSentence.completed = true

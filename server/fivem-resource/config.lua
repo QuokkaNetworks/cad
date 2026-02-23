@@ -493,10 +493,11 @@ local DEFAULT_WRAITH_SEATBELT_IGNORED_VEHICLE_CODES = {
   'scaniahp',
 }
 local DEFAULT_CAD_JAIL_SPAWN_POINTS = {
-  { x = 1770.7249755859, y = 2479.9802246094, z = 45.74076461792, w = 31.66007232666, label = 'Yard A', emote = 'pushup' },
-  { x = 1761.0710449219, y = 2474.9235839844, z = 49.693054199219, w = 33.123195648193, label = 'Cell Block Upper', emote = 'pushup' },
-  { x = 1745.0281982422, y = 2479.2116699219, z = 45.740684509277, w = 323.06579589844, label = 'Weights Yard', emote = 'weights' },
-  { x = 1768.1342773438, y = 2481.6772460938, z = 45.740734100342, w = 33.281074523926, label = 'Yard Wall', emote = 'lean' },
+  { x = 1758.74, y = 2472.56, z = 48.69, w = 29.06, label = 'Cell 1' },
+  { x = 1761.74, y = 2474.52, z = 48.69, w = 10.06, label = 'Cell 2' },
+  { x = 1764.96, y = 2476.12, z = 48.69, w = 26.17, label = 'Cell 3' },
+  { x = 1767.76, y = 2478.01, z = 48.69, w = 15.11, label = 'Cell 4' },
+  { x = 1771.37, y = 2480.1, z = 48.69, w = 26.3, label = 'Cell 5' },
 }
 local DEFAULT_CAD_JAIL_RELEASE_POINTS = {
   {
@@ -672,6 +673,7 @@ Config.JobSyncCommandTemplate = getString('cad_bridge_job_sync_command', 'qbx_se
 Config.JailAdapter = trim(getString('cad_bridge_jail_adapter', 'cad_bridge'))
 if Config.JailAdapter == '' then Config.JailAdapter = 'cad_bridge' end
 Config.JailCommandTemplate = getString('cad_bridge_jail_command', 'jail {source} {minutes} {reason}')
+Config.CadBridgeJailManageInventory = getBoolean('cad_bridge_jail_manage_inventory', true)
 Config.CadBridgeJailSpawnPoints = normalizeVec4List(getJsonTable('cad_bridge_jail_spawn_points_json'), DEFAULT_CAD_JAIL_SPAWN_POINTS)
 Config.CadBridgeJailReleasePoints = normalizeVec4List(getJsonTable('cad_bridge_jail_release_points_json'), DEFAULT_CAD_JAIL_RELEASE_POINTS)
 Config.CadBridgeEnablePrisonOutfits = getBoolean('cad_bridge_jail_enable_prison_outfits', true)
