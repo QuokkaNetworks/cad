@@ -627,9 +627,17 @@ function extractJobFromCharacterRow(row, charinfo, configuredJobColumn) {
 }
 
 function getQboxTableConfig() {
+  const playersTable = getSetting('qbox_players_table', 'players');
+  const vehiclesTable = getSetting('qbox_vehicles_table', 'player_vehicles');
+  const jobTable = getSetting('qbox_job_table', playersTable);
+  const jobMatchCol = getSetting('qbox_job_match_col', 'license');
+  const jobGradeCol = getSetting('qbox_job_grade_col', '');
   return {
-    playersTable: getSetting('qbox_players_table', 'players'),
-    vehiclesTable: getSetting('qbox_vehicles_table', 'player_vehicles'),
+    playersTable,
+    vehiclesTable,
+    jobTable,
+    jobMatchCol,
+    jobGradeCol,
     playerGroupsTable: getSetting('qbox_player_groups_table', 'player_groups'),
     playerGroupsCitizenIdCol: getSetting('qbox_player_groups_citizenid_col', 'citizenid'),
     playerGroupsGroupCol: getSetting('qbox_player_groups_group_col', 'group'),
@@ -726,6 +734,7 @@ async function inspectConfiguredSchema() {
     message: '',
     config: {},
     players: { exists: false, columns: [], warnings: [] },
+    jobs: { exists: false, columns: [], warnings: [] },
     vehicles: { exists: false, columns: [], warnings: [] },
     errors: [],
   };
@@ -735,26 +744,41 @@ async function inspectConfiguredSchema() {
     const cfg = getQboxTableConfig();
     report.config = cfg;
 
-    if (!IDENTIFIER_RE.test(cfg.playersTable) || !IDENTIFIER_RE.test(cfg.vehiclesTable)) {
+    if (!IDENTIFIER_RE.test(cfg.playersTable) || !IDENTIFIER_RE.test(cfg.vehiclesTable) || !IDENTIFIER_RE.test(cfg.jobTable)) {
       report.errors.push('Configured table names contain invalid characters');
       report.message = 'Schema check failed';
       return report;
     }
-    if (!IDENTIFIER_RE.test(cfg.citizenIdCol) || !IDENTIFIER_RE.test(cfg.charInfoCol) || !IDENTIFIER_RE.test(cfg.moneyCol) || !IDENTIFIER_RE.test(cfg.jobCol)) {
+    if (
+      !IDENTIFIER_RE.test(cfg.citizenIdCol)
+      || !IDENTIFIER_RE.test(cfg.charInfoCol)
+      || !IDENTIFIER_RE.test(cfg.moneyCol)
+      || !IDENTIFIER_RE.test(cfg.jobCol)
+      || !IDENTIFIER_RE.test(cfg.jobMatchCol)
+      || (String(cfg.jobGradeCol || '').trim() && !IDENTIFIER_RE.test(cfg.jobGradeCol))
+    ) {
       report.errors.push('Configured player column names contain invalid characters');
       report.message = 'Schema check failed';
       return report;
     }
 
     const playersColumns = await getTableColumns(cfg.playersTable);
+    const jobColumns = cfg.jobTable === cfg.playersTable
+      ? playersColumns
+      : await getTableColumns(cfg.jobTable);
     const vehiclesColumns = await getTableColumns(cfg.vehiclesTable);
     report.players.exists = playersColumns.length > 0;
     report.players.columns = playersColumns;
+    report.jobs.exists = jobColumns.length > 0;
+    report.jobs.columns = jobColumns;
     report.vehicles.exists = vehiclesColumns.length > 0;
     report.vehicles.columns = vehiclesColumns;
 
     if (!report.players.exists) {
       report.errors.push(`Players table "${cfg.playersTable}" was not found`);
+    }
+    if (!report.jobs.exists) {
+      report.errors.push(`Job source table "${cfg.jobTable}" was not found`);
     }
     if (!report.vehicles.exists) {
       report.errors.push(`Vehicles table "${cfg.vehiclesTable}" was not found`);
@@ -770,8 +794,15 @@ async function inspectConfiguredSchema() {
     if (report.players.exists && !playersMap[cfg.moneyCol]) {
       report.players.warnings.push(`Money column "${cfg.moneyCol}" was not found in "${cfg.playersTable}"`);
     }
-    if (report.players.exists && !playersMap[cfg.jobCol]) {
-      report.players.warnings.push(`Job column "${cfg.jobCol}" was not found in "${cfg.playersTable}"`);
+    const jobsMap = buildColumnsMap(jobColumns);
+    if (report.jobs.exists && !jobsMap[cfg.jobCol]) {
+      report.jobs.warnings.push(`Job column "${cfg.jobCol}" was not found in "${cfg.jobTable}"`);
+    }
+    if (report.jobs.exists && !jobsMap[cfg.jobMatchCol]) {
+      report.jobs.warnings.push(`Job source match column "${cfg.jobMatchCol}" was not found in "${cfg.jobTable}" (job sync lookups may fail)`);
+    }
+    if (report.jobs.exists && String(cfg.jobGradeCol || '').trim() && !jobsMap[cfg.jobGradeCol]) {
+      report.jobs.warnings.push(`Job grade column "${cfg.jobGradeCol}" was not found in "${cfg.jobTable}" (grade-specific role matching may fail)`);
     }
     if (playersMap[cfg.charInfoCol] && !playersMap[cfg.charInfoCol].isJson) {
       report.players.warnings.push(`"${cfg.charInfoCol}" is ${playersMap[cfg.charInfoCol].dataType}, not JSON. JSON parsing fallback will be used.`);
@@ -941,20 +972,35 @@ async function getPlayerCharacterJobsByCitizenId(citizenId) {
     const p = await getPool();
     const {
       playersTable,
+      jobTable,
+      jobMatchCol,
       citizenIdCol,
       charInfoCol,
       jobCol,
+      jobGradeCol,
     } = getQboxTableConfig();
-    const tableNameSql = escapeIdentifier(playersTable, 'players table');
+    const sourceTable = String(jobTable || playersTable).trim() || playersTable;
+    const tableNameSql = escapeIdentifier(sourceTable, 'job source table');
     const citizenIdColSql = escapeIdentifier(citizenIdCol, 'citizen ID column');
-    const licenseColSql = escapeIdentifier('license', 'license column');
+    const jobMatchColKey = String(jobMatchCol || 'license').trim() || 'license';
+    const jobMatchColSql = escapeIdentifier(jobMatchColKey, 'job source match column');
+    const configuredJobGradeCol = String(jobGradeCol || '').trim();
 
     let rows = [];
     const accountLicense = await getLicenseByCitizenId(normalizedCitizenId).catch(() => null);
+    let usedPrimaryMatch = false;
+    let primaryMatchValue = '';
     if (accountLicense) {
+      primaryMatchValue = accountLicense;
+    } else if (jobMatchColKey.toLowerCase() === String(citizenIdCol || '').trim().toLowerCase()) {
+      primaryMatchValue = normalizedCitizenId;
+    }
+
+    if (primaryMatchValue) {
+      usedPrimaryMatch = true;
       [rows] = await p.query(
-        `SELECT * FROM ${tableNameSql} WHERE ${licenseColSql} = ?`,
-        [accountLicense]
+        `SELECT * FROM ${tableNameSql} WHERE ${jobMatchColSql} = ?`,
+        [primaryMatchValue]
       );
     }
 
@@ -978,7 +1024,10 @@ async function getPlayerCharacterJobsByCitizenId(citizenId) {
       if (!extractedJob || !String(extractedJob.name || '').trim()) continue;
 
       const name = normalizeJobName(extractedJob.name);
-      const grade = normalizeJobGrade(extractedJob.grade);
+      let grade = normalizeJobGrade(extractedJob.grade);
+      if (configuredJobGradeCol && Object.prototype.hasOwnProperty.call(row, configuredJobGradeCol)) {
+        grade = normalizeJobGrade(row[configuredJobGradeCol]);
+      }
       const dedupeKey = `${rowCitizenId.toLowerCase()}::${name.toLowerCase()}::${grade}`;
       if (seen.has(dedupeKey)) continue;
       seen.add(dedupeKey);

@@ -9,6 +9,9 @@ const QBOX_SETTING_KEYS = [
   'qbox_password',
   'qbox_database',
   'qbox_players_table',
+  'qbox_job_table',
+  'qbox_job_match_col',
+  'qbox_job_grade_col',
   'qbox_vehicles_table',
   'qbox_citizenid_col',
   'qbox_charinfo_col',
@@ -188,6 +191,32 @@ export default function AdminQboxSettings() {
             />
           </div>
           <div>
+            <label className="block text-xs text-cad-muted mb-1">Job Source Table</label>
+            <input
+              type="text"
+              value={settings.qbox_job_table || ''}
+              onChange={(e) => updateSetting('qbox_job_table', e.target.value)}
+              className="w-full bg-cad-surface border border-cad-border rounded px-3 py-1.5 text-xs focus:outline-none focus:border-cad-accent"
+              placeholder="players (leave blank to use Players Table)"
+            />
+            <p className="text-[11px] text-cad-muted mt-1">
+              Used for job-role sync lookups. Must contain the configured citizen ID column and job column.
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs text-cad-muted mb-1">Job Match Column</label>
+            <input
+              type="text"
+              value={settings.qbox_job_match_col || ''}
+              onChange={(e) => updateSetting('qbox_job_match_col', e.target.value)}
+              className="w-full bg-cad-surface border border-cad-border rounded px-3 py-1.5 text-xs focus:outline-none focus:border-cad-accent"
+              placeholder="license"
+            />
+            <p className="text-[11px] text-cad-muted mt-1">
+              Column used to match the player account in the job table (for <span className="font-mono">q_multipjob</span> use <span className="font-mono">identifier</span>).
+            </p>
+          </div>
+          <div>
             <label className="block text-xs text-cad-muted mb-1">Vehicles Table</label>
             <input
               type="text"
@@ -237,6 +266,19 @@ export default function AdminQboxSettings() {
               placeholder="job"
             />
           </div>
+          <div>
+            <label className="block text-xs text-cad-muted mb-1">Job Grade Column (Optional)</label>
+            <input
+              type="text"
+              value={settings.qbox_job_grade_col || ''}
+              onChange={(e) => updateSetting('qbox_job_grade_col', e.target.value)}
+              className="w-full bg-cad-surface border border-cad-border rounded px-3 py-1.5 text-xs focus:outline-none focus:border-cad-accent"
+              placeholder="grade"
+            />
+            <p className="text-[11px] text-cad-muted mt-1">
+              Use when grade is stored in a separate column (for <span className="font-mono">q_multipjob</span> set this to <span className="font-mono">grade</span>).
+            </p>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 mt-4">
@@ -271,6 +313,11 @@ export default function AdminQboxSettings() {
             {Array.isArray(schemaResult.players?.warnings) && schemaResult.players.warnings.length > 0 && (
               <div className="text-amber-300 whitespace-pre-wrap mt-2">
                 {'Player Warnings:\n- ' + schemaResult.players.warnings.join('\n- ')}
+              </div>
+            )}
+            {Array.isArray(schemaResult.jobs?.warnings) && schemaResult.jobs.warnings.length > 0 && (
+              <div className="text-amber-300 whitespace-pre-wrap mt-2">
+                {'Job Source Warnings:\n- ' + schemaResult.jobs.warnings.join('\n- ')}
               </div>
             )}
             {Array.isArray(schemaResult.vehicles?.warnings) && schemaResult.vehicles.warnings.length > 0 && (
