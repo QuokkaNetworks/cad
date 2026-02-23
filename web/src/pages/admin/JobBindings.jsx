@@ -29,6 +29,7 @@ export default function AdminJobBindings() {
   const { key: locationKey } = useLocation();
   const [mappings, setMappings] = useState([]);
   const [discordRoles, setDiscordRoles] = useState([]);
+  const [users, setUsers] = useState([]);
   const [selectedRole, setSelectedRole] = useState('');
   const [jobName, setJobName] = useState('');
   const [jobGrade, setJobGrade] = useState('');
@@ -40,8 +41,12 @@ export default function AdminJobBindings() {
 
   async function fetchData() {
     try {
-      const mappingsData = await api.get('/api/admin/role-mappings');
+      const [mappingsData, usersData] = await Promise.all([
+        api.get('/api/admin/role-mappings'),
+        api.get('/api/admin/users'),
+      ]);
       setMappings((mappingsData || []).filter(m => m.target_type === 'job'));
+      setUsers(Array.isArray(usersData) ? usersData : []);
 
       try {
         const rolesData = await api.get('/api/admin/discord/roles');
@@ -174,15 +179,34 @@ export default function AdminJobBindings() {
         <h3 className="text-sm font-semibold mb-3">Debug User Job Sync</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <div className="md:col-span-2">
-            <label className="block text-xs text-cad-muted mb-1">CAD User ID</label>
-            <input
-              type="number"
-              min="1"
+            <label className="block text-xs text-cad-muted mb-1">CAD User</label>
+            <select
               value={debugUserId}
               onChange={e => setDebugUserId(e.target.value)}
               className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm focus:outline-none focus:border-cad-accent"
-              placeholder="Example: 4"
-            />
+            >
+              <option value="">Select user...</option>
+              {users
+                .slice()
+                .sort((a, b) => {
+                  const aName = String(a?.steam_name || '').toLowerCase();
+                  const bName = String(b?.steam_name || '').toLowerCase();
+                  if (aName && bName && aName !== bName) return aName.localeCompare(bName);
+                  return Number(a?.id || 0) - Number(b?.id || 0);
+                })
+                .map((user) => {
+                  const userId = String(user?.id || '');
+                  const name = String(user?.steam_name || '').trim() || 'Unnamed';
+                  const cid = String(user?.preferred_citizen_id || '').trim();
+                  const discordLinked = String(user?.discord_id || '').trim() ? 'Discord Linked' : 'No Discord';
+                  const label = `#${userId} - ${name}${cid ? ` - CID ${cid}` : ''} - ${discordLinked}`;
+                  return (
+                    <option key={userId} value={userId}>
+                      {label}
+                    </option>
+                  );
+                })}
+            </select>
           </div>
           <div>
             <button

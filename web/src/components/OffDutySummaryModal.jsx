@@ -14,6 +14,23 @@ function formatDuration(seconds) {
   return `${secs}s`;
 }
 
+function formatCallsign(value) {
+  const text = String(value || '').trim();
+  if (!text) return '-';
+  return text.toUpperCase();
+}
+
+function formatStatusLabel(value) {
+  const text = String(value || '').trim();
+  if (!text) return 'Unknown';
+  return text
+    .replace(/[_-]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function buildStatRows(summary) {
   const stats = summary?.stats || {};
   const candidates = [
@@ -55,7 +72,7 @@ export default function OffDutySummaryModal({ open, summary, onClose }) {
           <div className="bg-cad-card border border-cad-border rounded-lg p-3">
             <p className="text-[11px] uppercase tracking-wider text-cad-muted">Unit</p>
             <p className="mt-1 text-sm text-cad-ink font-medium">
-              {unit.callsign || '-'}
+              {formatCallsign(unit.callsign)}
               {unit.sub_department_short_name ? ` (${unit.sub_department_short_name})` : ''}
             </p>
           </div>
@@ -69,7 +86,7 @@ export default function OffDutySummaryModal({ open, summary, onClose }) {
           </div>
           <div className="bg-cad-card border border-cad-border rounded-lg p-3">
             <p className="text-[11px] uppercase tracking-wider text-cad-muted">Final Status</p>
-            <p className="mt-1 text-sm text-cad-ink">{String(unit.status || 'unknown')}</p>
+            <p className="mt-1 text-sm text-cad-ink">{formatStatusLabel(unit.status)}</p>
           </div>
         </div>
 
