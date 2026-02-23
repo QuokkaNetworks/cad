@@ -360,6 +360,7 @@
   z-index: 1;
 }
 
+/* ── Driver Licence Card ─────────────────────────────────────── */
 .cad-license-viewer {
   width: 100%;
   display: flex;
@@ -367,19 +368,20 @@
 }
 
 .cad-license-viewer .id-card {
-  width: min(560px, 100%);
-  max-height: none;
+  /* Standard credit-card aspect ratio (ISO 7810 ID-1: 85.6 × 54 mm ≈ 1.586:1).
+     We render it wider for readability at a comfortable 520px, height follows. */
+  width: min(520px, 100%);
   overflow: hidden;
   position: relative;
   isolation: isolate;
-  border-radius: 12px;
-  border: 1px solid #7ca270;
+  border-radius: 14px;
+  border: 1.5px solid #7ca270;
   background:
     radial-gradient(circle at 18% 38%, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0.12) 33%, transparent 52%),
     repeating-linear-gradient(168deg, rgba(93, 145, 78, 0.24) 0px, rgba(93, 145, 78, 0.24) 2px, rgba(226, 244, 216, 0.16) 2px, rgba(226, 244, 216, 0.16) 8px),
     linear-gradient(160deg, #dbeec9 0%, #c4e1a8 45%, #d8ecc6 100%);
-  box-shadow: 0 14px 34px rgba(5, 24, 13, 0.34);
-  padding: 0.48rem 0.54rem 0.52rem;
+  box-shadow: 0 12px 30px rgba(5, 24, 13, 0.32);
+  padding: 0.55rem 0.6rem 0.6rem;
   font-family: "Bahnschrift", "Segoe UI", Tahoma, sans-serif;
 }
 
@@ -387,10 +389,10 @@
   position: absolute;
   left: 44%;
   top: 58%;
-  width: min(320px, 66%);
+  width: min(300px, 62%);
   height: auto;
   transform: translate(-50%, -50%) rotate(-11deg);
-  opacity: 0.12;
+  opacity: 0.1;
   pointer-events: none;
   user-select: none;
   z-index: 0;
@@ -407,7 +409,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.58rem;
+  gap: 0.5rem;
 }
 
 .cad-license-viewer .id-card-banner {
@@ -417,39 +419,40 @@
   background: linear-gradient(135deg, #044497, #1c5dab);
   color: #ffffff;
   text-align: center;
-  padding: 0.24rem 0.5rem 0.2rem;
+  padding: 0.26rem 0.5rem 0.22rem;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .cad-license-viewer .id-card-banner-line1 {
-  font-size: 1rem;
+  font-size: 0.95rem;
   line-height: 1;
   font-weight: 800;
   letter-spacing: 0.08em;
 }
 
 .cad-license-viewer .id-card-banner-line2 {
-  margin-top: 0.06rem;
-  font-size: 0.84rem;
+  margin-top: 0.05rem;
+  font-size: 0.78rem;
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0.07em;
 }
 
 .cad-license-viewer .id-card-title {
-  margin: 0.2rem 0 0.2rem;
-  font-size: 0.61rem;
+  margin: 0.22rem 0 0.18rem;
+  font-size: 0.58rem;
   color: #1d2a1a;
   text-transform: uppercase;
   letter-spacing: 0.14em;
   font-weight: 700;
 }
 
+/* Body: text area takes remaining space, photo column is square */
 .cad-license-viewer .id-card-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 120px;
-  gap: 0.45rem;
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 0.5rem;
+  align-items: start;
 }
 
 .cad-license-viewer .id-card-main {
@@ -460,7 +463,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 0.45rem;
+  gap: 0.4rem;
 }
 
 .cad-license-viewer .id-card-name-block,
@@ -470,11 +473,12 @@
 
 .cad-license-viewer .id-card-licence-block {
   text-align: right;
+  flex-shrink: 0;
 }
 
 .cad-license-viewer .id-card-top-label {
   display: block;
-  font-size: 0.53rem;
+  font-size: 0.5rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #2f4738;
@@ -483,21 +487,21 @@
 
 .cad-license-viewer .id-card-name {
   display: block;
-  margin-top: 0.08rem;
-  font-size: 1.02rem;
-  line-height: 1.06;
+  margin-top: 0.06rem;
+  font-size: 0.95rem;
+  line-height: 1.08;
   color: #0f2215;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   word-break: break-word;
 }
 
 .cad-license-viewer .id-card-licence-no {
   display: block;
-  margin-top: 0.08rem;
-  font-size: 1rem;
-  line-height: 1.06;
+  margin-top: 0.06rem;
+  font-size: 0.92rem;
+  line-height: 1.08;
   color: #0f2215;
   font-weight: 800;
   letter-spacing: 0.03em;
@@ -506,30 +510,30 @@
 }
 
 .cad-license-viewer .id-card-address-block {
-  margin-top: 0.25rem;
-  padding: 0.22rem 0.3rem;
-  border-radius: 6px;
+  margin-top: 0.24rem;
+  padding: 0.2rem 0.3rem;
+  border-radius: 5px;
   border: 1px solid rgba(24, 56, 36, 0.2);
   background: rgba(255, 255, 255, 0.3);
 }
 
 .cad-license-viewer .id-card-address-value {
   display: block;
-  margin-top: 0.1rem;
-  font-size: 0.8rem;
-  line-height: 1.22;
+  margin-top: 0.08rem;
+  font-size: 0.76rem;
+  line-height: 1.2;
   white-space: pre-line;
   text-transform: uppercase;
   font-weight: 700;
 }
 
 .cad-license-viewer .id-card-bottom-grid {
-  margin-top: 0.28rem;
-  padding-top: 0.26rem;
+  margin-top: 0.26rem;
+  padding-top: 0.22rem;
   border-top: 1px solid rgba(24, 56, 36, 0.26);
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.28rem 0.52rem;
+  gap: 0.24rem 0.44rem;
 }
 
 .cad-license-viewer .id-card-field {
@@ -537,11 +541,11 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.02rem;
+  gap: 0;
 }
 
 .cad-license-viewer .id-label {
-  font-size: 0.52rem;
+  font-size: 0.5rem;
   color: #32493a;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -549,35 +553,37 @@
 }
 
 .cad-license-viewer .id-value {
-  font-size: 0.82rem;
-  line-height: 1.12;
+  font-size: 0.78rem;
+  line-height: 1.15;
   color: #0f2215;
   font-weight: 800;
   overflow-wrap: anywhere;
   text-transform: uppercase;
 }
 
+/* Photo panel — square photo, flush to the top-right */
 .cad-license-viewer .id-card-photo-panel {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0;
 }
 
 .cad-license-viewer .id-card-photo {
-  width: 120px;
-  height: 138px;
+  width: 112px;
+  height: 112px;          /* square */
   object-fit: cover;
-  object-position: top;
-  border-radius: 6px;
-  border: 1px solid rgba(24, 56, 36, 0.45);
+  object-position: top center;
+  border-radius: 7px;
+  border: 1.5px solid rgba(24, 56, 36, 0.4);
   background: rgba(255, 255, 255, 0.42);
+  display: block;
+  flex-shrink: 0;
 }
 
 .cad-license-viewer .id-card-photo-placeholder {
   background:
-    radial-gradient(circle at 50% 30%, rgba(255,255,255,0.35), transparent 35%),
-    linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04));
+    radial-gradient(circle at 50% 38%, rgba(255,255,255,0.38), transparent 40%),
+    linear-gradient(180deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
 }
 
 @media (max-width: 1024px) {
@@ -598,57 +604,46 @@
 @media (max-width: 760px) {
   .cad-license-viewer .id-card {
     padding: 0.44rem 0.46rem 0.5rem;
+    border-radius: 10px;
   }
 
+  /* On small screens keep the side-by-side layout but shrink the photo column */
   .cad-license-viewer .id-card-body {
-    grid-template-columns: 1fr;
-    gap: 0.5rem;
+    grid-template-columns: minmax(0, 1fr) 88px;
+    gap: 0.38rem;
   }
 
   .cad-license-viewer .id-card-banner-line1 {
-    font-size: 0.94rem;
+    font-size: 0.86rem;
   }
 
   .cad-license-viewer .id-card-banner-line2 {
-    font-size: 0.82rem;
-  }
-
-  .cad-license-viewer .id-card-top {
-    gap: 0.38rem;
+    font-size: 0.74rem;
   }
 
   .cad-license-viewer .id-card-name,
   .cad-license-viewer .id-card-licence-no {
-    font-size: 0.94rem;
+    font-size: 0.86rem;
   }
 
   .cad-license-viewer .id-card-address-value {
-    font-size: 0.76rem;
-  }
-
-  .cad-license-viewer .id-card-bottom-grid {
-    grid-template-columns: 1fr;
+    font-size: 0.7rem;
   }
 
   .cad-license-viewer .id-value {
-    font-size: 0.78rem;
-  }
-
-  .cad-license-viewer .id-card-photo-panel {
-    align-items: flex-start;
-    flex-direction: row;
+    font-size: 0.72rem;
   }
 
   .cad-license-viewer .id-card-photo {
-    width: 102px;
-    height: 124px;
+    width: 88px;
+    height: 88px;   /* stays square */
   }
 
   .cad-license-viewer .id-card-watermark {
     left: 50%;
     top: 63%;
-    width: min(300px, 72%);
-    opacity: 0.1;
+    width: min(260px, 68%);
+    opacity: 0.09;
   }
 }
 

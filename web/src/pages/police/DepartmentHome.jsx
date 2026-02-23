@@ -3,10 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import GoOnDutyModal from '../../components/GoOnDutyModal';
 import OffDutySummaryModal from '../../components/OffDutySummaryModal';
+import { useAuth } from '../../context/AuthContext';
 import { useDepartment } from '../../context/DepartmentContext';
 import { useEventSource } from '../../hooks/useEventSource';
 import { DEPARTMENT_LAYOUT, getDepartmentLayoutType } from '../../utils/departmentLayout';
 import { formatDateAU, formatTimeAU } from '../../utils/dateTime';
+
+// Mirror the sidebar's visibility rules so hidden items don't appear on the home screen.
+// Route → whether it requires FiveM to be online (same list as requiresFiveMOnlineForNavItem in Sidebar.jsx)
+const FIVEM_REQUIRED_ROUTES = new Set(['/incidents', '/records', '/arrest-reports', '/warrants', '/evidence']);
+// Routes that only appear when the user is on duty in this department
+const DUTY_REQUIRED_ROUTES = new Set(['/units', '/dispatch']);
 
 const DEFAULT_STATS = Object.freeze({
   active_calls: 0,
@@ -180,6 +187,7 @@ function PanelCard({ panel, accent, navigate }) {
 
 export default function DepartmentHome() {
   const navigate = useNavigate();
+  const { isFiveMOnline } = useAuth();
   const { activeDepartment } = useDepartment();
   const [stats, setStats] = useState(DEFAULT_STATS);
   const [loading, setLoading] = useState(true);
@@ -528,9 +536,43 @@ export default function DepartmentHome() {
     return [];
   })();
 
+  // Mirror the sidebar's visibility rules:
+  // 1. /units and /dispatch only appear when the user is on duty in this department.
+  // 2. FiveM-protected routes only appear when FiveM is online (or it's a dispatch workspace).
+  const hideInGameItems = !isFiveMOnline && !isDispatch;
+  const visibleQuickActions = quickActions.filter(action => {
+    if (DUTY_REQUIRED_ROUTES.has(action.route) && !onActiveDeptDuty) return false;
+    if (FIVEM_REQUIRED_ROUTES.has(action.route) && hideInGameItems) return false;
+    return true;
+  });
+
+  // Department panels that link exclusively to hidden routes should also be removed.
+  const visibleDepartmentPanels = departmentPanels.filter(panel => {
+    // If every action in this panel links to a hidden route, hide the whole panel.
+    const visibleActions = panel.actions.filter(action => {
+      const route = action.route.split('?')[0]; // strip query string
+      if (DUTY_REQUIRED_ROUTES.has(route) && !onActiveDeptDuty) return false;
+      if (FIVEM_REQUIRED_ROUTES.has(route) && hideInGameItems) return false;
+      return true;
+    });
+    return visibleActions.length > 0;
+  }).map(panel => ({
+    ...panel,
+    actions: panel.actions.filter(action => {
+      const route = action.route.split('?')[0];
+      if (DUTY_REQUIRED_ROUTES.has(route) && !onActiveDeptDuty) return false;
+      if (FIVEM_REQUIRED_ROUTES.has(route) && hideInGameItems) return false;
+      return true;
+    }),
+  }));
+
+  // Track what's been hidden so we can show a contextual notice
+  const hiddenDutyRoutes = quickActions.filter(a => DUTY_REQUIRED_ROUTES.has(a.route) && !onActiveDeptDuty);
+  const hiddenFiveMRoutes = quickActions.filter(a => FIVEM_REQUIRED_ROUTES.has(a.route) && hideInGameItems);
+
   // Split quickActions: primary is first (col-span-2), rest are regular
-  const primaryAction = quickActions.find(a => a.variant === 'primary');
-  const secondaryActions = quickActions.filter(a => a.variant !== 'primary');
+  const primaryAction = visibleQuickActions.find(a => a.variant === 'primary');
+  const secondaryActions = visibleQuickActions.filter(a => a.variant !== 'primary');
 
   return (
     <div className="flex flex-col gap-4">
@@ -674,6 +716,7 @@ export default function DepartmentHome() {
       </div>
 
       {/* ── Live stat strip ────────────────────────────────── */}
+      {/* Only the 5 core counters — dept-specific counts (warrants, POIs) live in the panels below */}
       <div className="flex gap-3 flex-wrap sm:flex-nowrap">
         <StatCell
           label={isFireDepartment ? 'Active Incidents' : 'Active Calls'}
@@ -695,144 +738,141 @@ export default function DepartmentHome() {
           loading={loading}
         />
         <StatCell
-          label={isFireDepartment ? 'Crews Available' : 'Units Available'}
+          label={isFireDepartment ? 'Available' : 'Available'}
           value={stats.available_units}
           tone="default"
           loading={loading}
         />
         <StatCell
-          label={isFireDepartment ? 'Crews Assigned' : 'Assigned'}
+          label="Assigned"
           value={stats.assigned_units}
           tone="amber"
           loading={loading}
         />
-        {isPoliceDepartment && (
-          <>
-            <StatCell label="Warrants" value={stats.active_warrants} tone="amber" loading={loading} />
-            <StatCell label="POIs" value={stats.active_bolos} tone="blue" loading={loading} />
-          </>
-        )}
       </div>
 
-      {/* ── Main content: quick launch + dept panels ───────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_0.6fr] gap-4">
-
-        {/* Quick launch workspace */}
+      {/* ── Quick launch (full width, workflow steps inlined below) ── */}
+      <div
+        className="rounded-2xl border overflow-hidden"
+        style={{ borderColor: colorWithAlpha(deptColor, 0.16, 'rgba(42,58,78,1)') }}
+      >
+        {/* Header */}
         <div
-          className="rounded-2xl border overflow-hidden"
-          style={{ borderColor: colorWithAlpha(deptColor, 0.16, 'rgba(42,58,78,1)') }}
+          className="px-4 py-3 border-b flex items-center justify-between"
+          style={{
+            borderColor: colorWithAlpha(deptColor, 0.14, 'rgba(42,58,78,1)'),
+            background: colorWithAlpha(deptColor, 0.06),
+          }}
         >
-          <div
-            className="px-4 py-3 border-b flex items-center justify-between"
+          <div>
+            <SectionHeading>Operational Workspace</SectionHeading>
+            <p className="text-sm font-semibold text-cad-ink">Quick Launch</p>
+          </div>
+          <span
+            className="text-[9px] uppercase tracking-wider px-2 py-1 rounded-lg border"
             style={{
-              borderColor: colorWithAlpha(deptColor, 0.14, 'rgba(42,58,78,1)'),
-              background: colorWithAlpha(deptColor, 0.06),
+              borderColor: colorWithAlpha(deptColor, 0.25),
+              backgroundColor: colorWithAlpha(deptColor, 0.08),
+              color: '#c8d8f4',
             }}
           >
-            <div>
-              <SectionHeading>Operational Workspace</SectionHeading>
-              <p className="text-sm font-semibold text-cad-ink">Quick Launch</p>
-            </div>
-            <span
-              className="text-[9px] uppercase tracking-wider px-2 py-1 rounded-lg border"
-              style={{
-                borderColor: colorWithAlpha(deptColor, 0.25),
-                backgroundColor: colorWithAlpha(deptColor, 0.08),
-                color: '#c8d8f4',
-              }}
-            >
-              {departmentTypeLabel}
-            </span>
-          </div>
-
-          <div className="p-4 bg-cad-card/50">
-            {/* Primary action (full width) */}
-            {primaryAction && (
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                <ActionButton {...primaryAction} accent={deptColor} navigate={navigate} />
-              </div>
-            )}
-            {/* Secondary actions grid */}
-            {secondaryActions.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-3 gap-2">
-                {secondaryActions.map(action => (
-                  <ActionButton key={action.route} {...action} accent={deptColor} navigate={navigate} />
-                ))}
-              </div>
-            )}
-          </div>
+            {departmentTypeLabel}
+          </span>
         </div>
 
-        {/* Workflow guidance panel */}
-        <div
-          className="rounded-2xl border overflow-hidden"
-          style={{ borderColor: colorWithAlpha(deptColor, 0.16, 'rgba(42,58,78,1)') }}
-        >
-          <div
-            className="px-4 py-3 border-b"
-            style={{
-              borderColor: colorWithAlpha(deptColor, 0.14, 'rgba(42,58,78,1)'),
-              background: colorWithAlpha(deptColor, 0.06),
-            }}
-          >
-            <SectionHeading>Workflow</SectionHeading>
-            <p className="text-sm font-semibold text-cad-ink">Operating Procedure</p>
-          </div>
-          <div className="p-4 bg-cad-card/50">
-            {(() => {
-              const steps = isDispatch
-                ? [
-                    'Monitor new calls, timers, and priority alerts on the dispatch board.',
-                    'Allocate the closest available units and track pursuits in real time.',
-                    'Use lookup for cross-checks before escalating or linking incidents.',
-                  ]
-                : isPoliceDepartment
-                ? [
-                    'Use lookup to confirm licence and registration details before actioning.',
-                    'Create arrest reports for draft and supervisor review, then finalise when ready.',
-                    'Link records, warrants, POIs, and evidence under a shared incident.',
-                  ]
-                : isEmsDepartment
-                ? [
-                    'Allocate crews on the response board, then document care in Treatment Log.',
-                    'Use Transport Tracker for destination, ETA, and handover status.',
-                    'Complete patient reports for clinical records and follow-up review.',
-                  ]
-                : isFireDepartment
-                ? [
-                    'Use Response Board for live incident allocation and appliance coordination.',
-                    'Document post-incident outcomes in Incident Reports.',
-                    'Maintain pre-plans and apparatus readiness for repeat-risk locations.',
-                  ]
-                : ['Use the relevant workflow for live response, lookup, and documentation.'];
-              return (
-                <ol className="space-y-3">
-                  {steps.map((step, i) => (
-                    <li key={i} className="flex gap-3 items-start">
-                      <span
-                        className="mt-0.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center border shrink-0 tabular-nums"
-                        style={{
-                          borderColor: colorWithAlpha(deptColor, 0.35),
-                          backgroundColor: colorWithAlpha(deptColor, 0.12),
-                          color: '#c8d8f4',
-                        }}
-                      >
-                        {i + 1}
-                      </span>
-                      <p className="text-xs text-cad-muted leading-relaxed">{step}</p>
-                    </li>
-                  ))}
-                </ol>
-              );
-            })()}
-          </div>
+        <div className="p-4 bg-cad-card/50">
+          {/* Primary action (full width) */}
+          {primaryAction && (
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <ActionButton {...primaryAction} accent={deptColor} navigate={navigate} />
+            </div>
+          )}
+          {/* Secondary actions grid */}
+          {secondaryActions.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2">
+              {secondaryActions.map(action => (
+                <ActionButton key={action.route} {...action} accent={deptColor} navigate={navigate} />
+              ))}
+            </div>
+          )}
+
+          {/* Contextual notices for hidden items — mirrors sidebar banners */}
+          {hiddenDutyRoutes.length > 0 && (
+            <div className="mt-3 rounded-lg border border-cad-border bg-cad-surface/60 px-3 py-2 flex items-start gap-2">
+              <svg className="w-3.5 h-3.5 text-cad-muted mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-xs text-cad-muted">
+                <span className="text-cad-ink font-medium">Go on duty</span> to access the response board and dispatch tools.
+              </p>
+            </div>
+          )}
+          {hiddenFiveMRoutes.length > 0 && (
+            <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 flex items-start gap-2">
+              <svg className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <p className="text-xs text-amber-200">
+                <span className="font-medium">In-game required</span> — connect to the FiveM server to access {hiddenFiveMRoutes.map(a => a.label).join(', ')}.
+              </p>
+            </div>
+          )}
+
+          {/* Workflow steps — compact inline strip */}
+          {(() => {
+            const steps = isDispatch
+              ? [
+                  'Monitor new calls, timers, and priority alerts on the dispatch board.',
+                  'Allocate the closest available units and track pursuits in real time.',
+                  'Use lookup for cross-checks before escalating or linking incidents.',
+                ]
+              : isPoliceDepartment
+              ? [
+                  'Use lookup to confirm licence and registration details before actioning.',
+                  'Create arrest reports for draft and supervisor review, then finalise when ready.',
+                  'Link records, warrants, POIs, and evidence under a shared incident.',
+                ]
+              : isEmsDepartment
+              ? [
+                  'Allocate crews on the response board, then document care in Treatment Log.',
+                  'Use Transport Tracker for destination, ETA, and handover status.',
+                  'Complete patient reports for clinical records and follow-up review.',
+                ]
+              : isFireDepartment
+              ? [
+                  'Use Response Board for live incident allocation and appliance coordination.',
+                  'Document post-incident outcomes in Incident Reports.',
+                  'Maintain pre-plans and apparatus readiness for repeat-risk locations.',
+                ]
+              : ['Use the relevant workflow for live response, lookup, and documentation.'];
+            return (
+              <div className="mt-4 pt-3 border-t flex flex-wrap gap-3" style={{ borderColor: colorWithAlpha(deptColor, 0.12, 'rgba(42,58,78,0.5)') }}>
+                <p className="text-[9px] uppercase tracking-[0.18em] text-cad-muted self-center flex-none">Workflow</p>
+                {steps.map((step, i) => (
+                  <div key={i} className="flex items-start gap-1.5 flex-1 min-w-[180px]">
+                    <span
+                      className="mt-0.5 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center border shrink-0"
+                      style={{
+                        borderColor: colorWithAlpha(deptColor, 0.3),
+                        backgroundColor: colorWithAlpha(deptColor, 0.1),
+                        color: '#b0c4e0',
+                      }}
+                    >
+                      {i + 1}
+                    </span>
+                    <p className="text-[11px] text-cad-muted leading-relaxed">{step}</p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
       {/* ── Department-specific panels ─────────────────────── */}
-      {departmentPanels.length > 0 && (
-        <div className={`grid grid-cols-1 gap-4 ${departmentPanels.length >= 3 ? 'xl:grid-cols-3' : 'xl:grid-cols-2'}`}>
-          {departmentPanels.map((panel) => (
+      {visibleDepartmentPanels.length > 0 && (
+        <div className={`grid grid-cols-1 gap-4 ${visibleDepartmentPanels.length >= 3 ? 'xl:grid-cols-3' : 'xl:grid-cols-2'}`}>
+          {visibleDepartmentPanels.map((panel) => (
             <PanelCard key={panel.key} panel={panel} accent={deptColor} navigate={navigate} />
           ))}
         </div>
