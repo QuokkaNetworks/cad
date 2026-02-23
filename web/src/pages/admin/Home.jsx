@@ -22,7 +22,7 @@ const ADMIN_ITEMS = [
   {
     to: '/admin/job-bindings',
     title: 'Job Role Sync',
-    description: 'Bind QBox player_groups job + grade values to Discord roles.',
+    description: 'Bind QBox players.job job + grade values to Discord roles.',
     color: 'bg-indigo-500',
   },
   {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import AdminPageHeader from '../../components/AdminPageHeader';
 
@@ -12,6 +12,7 @@ function renderTarget(mapping) {
 
 export default function AdminRoleMappings() {
   const { key: locationKey } = useLocation();
+  const navigate = useNavigate();
   const [mappings, setMappings] = useState([]);
   const [discordRoles, setDiscordRoles] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -113,14 +114,25 @@ export default function AdminRoleMappings() {
         title="Role Access Sync"
         subtitle="Map Discord roles to department and sub-department access."
       />
-      <div className="flex items-center justify-between mb-6">
-        <button
-          onClick={syncAll}
-          disabled={syncing}
-          className="px-4 py-2 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-        >
-          {syncing ? 'Syncing...' : 'Sync All Members'}
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={syncAll}
+            disabled={syncing}
+            className="px-4 py-2 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {syncing ? 'Syncing...' : 'Sync All Members'}
+          </button>
+          <button
+            onClick={() => navigate('/admin/job-bindings')}
+            className="px-4 py-2 bg-cad-surface hover:bg-cad-card text-cad-ink rounded-lg text-sm font-medium border border-cad-border transition-colors"
+          >
+            Open Job Role Sync
+          </button>
+        </div>
+        <p className="text-xs text-cad-muted">
+          Job/grade Discord role mappings are managed in Job Role Sync.
+        </p>
       </div>
 
       <div className="bg-cad-card border border-cad-border rounded-lg overflow-hidden mb-6">
