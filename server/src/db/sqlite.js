@@ -1527,6 +1527,341 @@ const WarrantCommunityMessages = {
   },
 };
 
+function normalizeIncidentStatus(value, fallback = 'open') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['open', 'review', 'monitoring', 'closed'].includes(normalized)) return normalized;
+  return fallback;
+}
+
+function normalizeIncidentPriority(value, fallback = '2') {
+  const text = String(value || '').trim();
+  if (['1', '2', '3', '4'].includes(text)) return text;
+  return fallback;
+}
+
+function normalizeIncidentEntityType(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if ([
+    'call',
+    'criminal_record',
+    'arrest_report',
+    'warrant',
+    'poi',
+    'evidence',
+  ].includes(normalized)) {
+    return normalized;
+  }
+  return '';
+}
+
+function normalizeIncidentNumber(id) {
+  const parsed = Number(id);
+  if (!Number.isInteger(parsed) || parsed <= 0) return '';
+  return `INC-${String(parsed).padStart(6, '0')}`;
+}
+
+function hydrateIncidentRow(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    link_count: Number(row?.link_count || 0),
+  };
+}
+
+function hydrateIncidentLinkRow(row) {
+  if (!row) return row;
+  const entityType = normalizeIncidentEntityType(row.entity_type);
+  let entityTitle = '';
+  let entitySubtitle = '';
+
+  if (entityType === 'call') {
+    entityTitle = String(row.call_title || '').trim() || `Call #${row.entity_id}`;
+    const location = String(row.call_location || '').trim();
+    const jobCode = String(row.call_job_code || '').trim();
+    entitySubtitle = [jobCode, location].filter(Boolean).join(' | ');
+  } else if (entityType === 'criminal_record' || entityType === 'arrest_report') {
+    entityTitle = String(row.record_title || '').trim() || `Record #${row.entity_id}`;
+    const citizen = String(row.record_citizen_id || '').trim();
+    const type = entityType === 'arrest_report' ? 'Arrest Report' : 'Record';
+    entitySubtitle = [type, citizen ? `CID ${citizen}` : ''].filter(Boolean).join(' | ');
+  } else if (entityType === 'warrant') {
+    entityTitle = String(row.warrant_title || '').trim() || `Warrant #${row.entity_id}`;
+    const subject = String(row.warrant_subject_name || '').trim();
+    const citizen = String(row.warrant_citizen_id || '').trim();
+    entitySubtitle = [subject, citizen ? `CID ${citizen}` : ''].filter(Boolean).join(' | ');
+  } else if (entityType === 'poi') {
+    entityTitle = String(row.poi_title || '').trim() || `POI #${row.entity_id}`;
+    const poiType = String(row.poi_type || '').trim();
+    const status = String(row.poi_status || '').trim();
+    entitySubtitle = [poiType, status].filter(Boolean).join(' | ');
+  } else if (entityType === 'evidence') {
+    entityTitle = String(row.evidence_title || '').trim() || `Evidence #${row.entity_id}`;
+    const chainStatus = String(row.evidence_chain_status || '').trim();
+    const caseNumber = String(row.evidence_case_number || '').trim();
+    entitySubtitle = [chainStatus, caseNumber].filter(Boolean).join(' | ');
+  }
+
+  return {
+    ...row,
+    entity_type: entityType || String(row.entity_type || '').trim().toLowerCase(),
+    entity_title: entityTitle,
+    entity_subtitle: entitySubtitle,
+  };
+}
+
+// --- Incident Links ---
+const IncidentLinks = {
+  findById(id) {
+    return this.listByIncidentId(null, { linkId: id })[0] || null;
+  },
+  listByIncidentId(incidentId, { linkId = null } = {}) {
+    const conditions = [];
+    const params = [];
+    if (Number.isInteger(Number(incidentId)) && Number(incidentId) > 0) {
+      conditions.push('il.incident_id = ?');
+      params.push(Number(incidentId));
+    }
+    if (Number.isInteger(Number(linkId)) && Number(linkId) > 0) {
+      conditions.push('il.id = ?');
+      params.push(Number(linkId));
+    }
+    if (conditions.length === 0) return [];
+
+    return db.prepare(`
+      SELECT il.*,
+             us.steam_name AS creator_name,
+             c.title AS call_title,
+             c.location AS call_location,
+             c.job_code AS call_job_code,
+             cr.title AS record_title,
+             cr.citizen_id AS record_citizen_id,
+             w.title AS warrant_title,
+             w.subject_name AS warrant_subject_name,
+             w.citizen_id AS warrant_citizen_id,
+             b.title AS poi_title,
+             b.type AS poi_type,
+             b.status AS poi_status,
+             ei.title AS evidence_title,
+             ei.chain_status AS evidence_chain_status,
+             ei.case_number AS evidence_case_number
+      FROM incident_links il
+      LEFT JOIN users us ON us.id = il.created_by_user_id
+      LEFT JOIN calls c ON il.entity_type = 'call' AND c.id = il.entity_id
+      LEFT JOIN criminal_records cr ON (
+        (il.entity_type = 'criminal_record' AND cr.id = il.entity_id AND cr.type != 'arrest_report')
+        OR (il.entity_type = 'arrest_report' AND cr.id = il.entity_id AND cr.type = 'arrest_report')
+      )
+      LEFT JOIN warrants w ON il.entity_type = 'warrant' AND w.id = il.entity_id
+      LEFT JOIN bolos b ON il.entity_type = 'poi' AND b.id = il.entity_id
+      LEFT JOIN evidence_items ei ON il.entity_type = 'evidence' AND ei.id = il.entity_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY il.created_at DESC, il.id DESC
+    `).all(...params).map(hydrateIncidentLinkRow);
+  },
+  listByEntity(entityType, entityId, departmentIds = []) {
+    const normalizedType = normalizeIncidentEntityType(entityType);
+    const parsedEntityId = Number(entityId);
+    if (!normalizedType || !Number.isInteger(parsedEntityId) || parsedEntityId <= 0) return [];
+
+    const deptIds = Array.isArray(departmentIds)
+      ? Array.from(new Set(departmentIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)))
+      : [];
+
+    const deptFilter = deptIds.length > 0 ? `AND i.department_id IN (${deptIds.map(() => '?').join(', ')})` : '';
+
+    return db.prepare(`
+      SELECT il.*,
+             i.incident_number,
+             i.department_id,
+             i.title AS incident_title,
+             i.status AS incident_status,
+             i.priority AS incident_priority
+      FROM incident_links il
+      INNER JOIN incidents i ON i.id = il.incident_id
+      WHERE il.entity_type = ? AND il.entity_id = ? ${deptFilter}
+      ORDER BY i.created_at DESC, i.id DESC
+    `).all(normalizedType, parsedEntityId, ...deptIds);
+  },
+  create({ incident_id, entity_type, entity_id, note = '', created_by_user_id = null }) {
+    const incidentId = Number(incident_id);
+    const entityType = normalizeIncidentEntityType(entity_type);
+    const entityId = Number(entity_id);
+    if (!Number.isInteger(incidentId) || incidentId <= 0) throw new Error('incident_id is required');
+    if (!entityType) throw new Error('entity_type is required');
+    if (!Number.isInteger(entityId) || entityId <= 0) throw new Error('entity_id is required');
+
+    db.prepare(`
+      INSERT INTO incident_links (
+        incident_id, entity_type, entity_id, note, created_by_user_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `).run(
+      incidentId,
+      entityType,
+      entityId,
+      String(note || '').trim(),
+      Number.isInteger(Number(created_by_user_id)) && Number(created_by_user_id) > 0 ? Number(created_by_user_id) : null
+    );
+
+    return db.prepare(`
+      SELECT il.id
+      FROM incident_links il
+      WHERE il.incident_id = ? AND il.entity_type = ? AND il.entity_id = ?
+      ORDER BY il.id DESC
+      LIMIT 1
+    `).get(incidentId, entityType, entityId);
+  },
+  delete(id) {
+    const info = db.prepare('DELETE FROM incident_links WHERE id = ?').run(id);
+    return Number(info?.changes || 0);
+  },
+  deleteByIncidentId(incidentId) {
+    const info = db.prepare('DELETE FROM incident_links WHERE incident_id = ?').run(incidentId);
+    return Number(info?.changes || 0);
+  },
+};
+
+// --- Incidents (Cross-entity case linking) ---
+const Incidents = {
+  findById(id, { includeLinks = true } = {}) {
+    const row = db.prepare(`
+      SELECT i.*,
+             cu.steam_name AS created_by_name,
+             ou.steam_name AS owner_name,
+             COUNT(il.id) AS link_count
+      FROM incidents i
+      LEFT JOIN users cu ON cu.id = i.created_by_user_id
+      LEFT JOIN users ou ON ou.id = i.owner_user_id
+      LEFT JOIN incident_links il ON il.incident_id = i.id
+      WHERE i.id = ?
+      GROUP BY i.id
+    `).get(id);
+    if (!row) return null;
+    const incident = hydrateIncidentRow(row);
+    if (includeLinks) {
+      incident.links = IncidentLinks.listByIncidentId(incident.id);
+    }
+    return incident;
+  },
+  listByDepartmentIds(departmentIds = [], { status = 'open', limit = 100 } = {}) {
+    const ids = Array.isArray(departmentIds)
+      ? Array.from(new Set(departmentIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)))
+      : [];
+    if (ids.length === 0) return [];
+
+    const placeholders = ids.map(() => '?').join(', ');
+    const normalizedStatus = String(status || 'open').trim().toLowerCase();
+    const useAll = normalizedStatus === 'all';
+    const safeLimit = Math.min(250, Math.max(1, Math.trunc(Number(limit) || 100)));
+    const params = [...ids];
+    let statusClause = '';
+    if (!useAll) {
+      statusClause = 'AND i.status = ?';
+      params.push(normalizeIncidentStatus(normalizedStatus, 'open'));
+    }
+    params.push(safeLimit);
+
+    return db.prepare(`
+      SELECT i.*,
+             cu.steam_name AS created_by_name,
+             ou.steam_name AS owner_name,
+             COUNT(il.id) AS link_count
+      FROM incidents i
+      LEFT JOIN users cu ON cu.id = i.created_by_user_id
+      LEFT JOIN users ou ON ou.id = i.owner_user_id
+      LEFT JOIN incident_links il ON il.incident_id = i.id
+      WHERE i.department_id IN (${placeholders}) ${statusClause}
+      GROUP BY i.id
+      ORDER BY
+        CASE i.status
+          WHEN 'open' THEN 0
+          WHEN 'review' THEN 1
+          WHEN 'monitoring' THEN 2
+          WHEN 'closed' THEN 3
+          ELSE 4
+        END,
+        i.created_at DESC,
+        i.id DESC
+      LIMIT ?
+    `).all(...params).map(hydrateIncidentRow);
+  },
+  create(fields = {}) {
+    const info = db.prepare(`
+      INSERT INTO incidents (
+        incident_number,
+        department_id,
+        title,
+        summary,
+        location,
+        priority,
+        status,
+        owner_user_id,
+        created_by_user_id,
+        created_at,
+        updated_at
+      ) VALUES (
+        '',
+        ?, ?, ?, ?, ?, ?, ?, ?,
+        datetime('now'),
+        datetime('now')
+      )
+    `).run(
+      Number.isInteger(Number(fields.department_id)) && Number(fields.department_id) > 0 ? Number(fields.department_id) : null,
+      String(fields.title || '').trim(),
+      String(fields.summary || '').trim(),
+      String(fields.location || '').trim(),
+      normalizeIncidentPriority(fields.priority, '2'),
+      normalizeIncidentStatus(fields.status, 'open'),
+      Number.isInteger(Number(fields.owner_user_id)) && Number(fields.owner_user_id) > 0 ? Number(fields.owner_user_id) : null,
+      Number.isInteger(Number(fields.created_by_user_id)) && Number(fields.created_by_user_id) > 0 ? Number(fields.created_by_user_id) : null,
+    );
+    const incidentId = Number(info.lastInsertRowid || 0);
+    if (incidentId > 0) {
+      db.prepare(`UPDATE incidents SET incident_number = ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(normalizeIncidentNumber(incidentId), incidentId);
+    }
+    return this.findById(incidentId);
+  },
+  update(id, fields = {}) {
+    const allowed = [
+      'title',
+      'summary',
+      'location',
+      'priority',
+      'status',
+      'owner_user_id',
+    ];
+    const updates = [];
+    const values = [];
+    for (const key of allowed) {
+      if (fields[key] === undefined) continue;
+      updates.push(`${key} = ?`);
+      if (key === 'priority') {
+        values.push(normalizeIncidentPriority(fields[key], '2'));
+      } else if (key === 'status') {
+        values.push(normalizeIncidentStatus(fields[key], 'open'));
+      } else if (key === 'owner_user_id') {
+        const parsed = Number(fields[key]);
+        values.push(Number.isInteger(parsed) && parsed > 0 ? parsed : null);
+      } else {
+        values.push(String(fields[key] || '').trim());
+      }
+    }
+    if (updates.length === 0) return this.findById(id);
+    updates.push("updated_at = datetime('now')");
+    values.push(id);
+    db.prepare(`UPDATE incidents SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+    return this.findById(id);
+  },
+  delete(id) {
+    const tx = db.transaction((incidentId) => {
+      IncidentLinks.deleteByIncidentId(incidentId);
+      const info = db.prepare('DELETE FROM incidents WHERE id = ?').run(incidentId);
+      return Number(info?.changes || 0);
+    });
+    return tx(id);
+  },
+};
+
 // --- Offence Catalog ---
 const OffenceCatalog = {
   list(activeOnly = false) {
@@ -3236,6 +3571,8 @@ module.exports = {
   Bolos,
   Warrants,
   WarrantCommunityMessages,
+  Incidents,
+  IncidentLinks,
   OffenceCatalog,
   CriminalRecords,
   CadWarnings,

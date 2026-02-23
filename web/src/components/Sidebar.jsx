@@ -9,6 +9,7 @@ import { DEPARTMENT_LAYOUT, getDepartmentLayoutType } from '../utils/departmentL
 const LAW_NAV = [
   { to: '/department', label: 'Home', icon: 'M3 12l9-9 9 9M4 10v10h5v-6h6v6h5V10' },
   { to: '/search', label: 'Search', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
+  { to: '/incidents', label: 'Incidents', icon: 'M9 12h6m-6 4h6M8 2h8a2 2 0 012 2v16l-6-3-6 3V4a2 2 0 012-2z' },
   { to: '/records', label: 'Records', icon: 'M9 12h6m-6 4h6M8 2h8a2 2 0 012 2v16l-6-3-6 3V4a2 2 0 012-2z' },
   { to: '/arrest-reports', label: 'Arrest Reports', icon: 'M12 8v8m-4-4h8M8 2h8a2 2 0 012 2v16l-6-3-6 3V4a2 2 0 012-2z' },
   { to: '/warrants', label: 'Warrants', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
@@ -19,6 +20,7 @@ const LAW_NAV = [
 
 const EMS_NAV = [
   { to: '/department', label: 'Home', icon: 'M3 12l9-9 9 9M4 10v10h5v-6h6v6h5V10' },
+  { to: '/incidents', label: 'Incidents', icon: 'M9 12h6m-6 4h6M8 2h8a2 2 0 012 2v16l-6-3-6 3V4a2 2 0 012-2z' },
   { to: '/ems-treatment', label: 'Treatment Log', icon: 'M12 6v12m6-6H6' },
   { to: '/ems-transport', label: 'Transport Tracker', icon: 'M3 13h2l2-5 4 10 2-5h6' },
   { to: '/records', label: 'Patient Reports', icon: 'M9 12h6m-6 4h6M8 2h8a2 2 0 012 2v16l-6-3-6 3V4a2 2 0 012-2z' },
@@ -28,6 +30,7 @@ const EMS_NAV = [
 const FIRE_NAV = [
   { to: '/department', label: 'Home', icon: 'M3 12l9-9 9 9M4 10v10h5v-6h6v6h5V10' },
   { to: '/units', label: 'Response Board', icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100-8 4 4 0 000 8zm11 4l-4.35 4.35M17 11h4m-2-2v4' },
+  { to: '/incidents', label: 'Incidents', icon: 'M9 12h6m-6 4h6M8 2h8a2 2 0 012 2v16l-6-3-6 3V4a2 2 0 012-2z' },
   { to: '/records', label: 'Incident Reports', icon: 'M9 12h6m-6 4h6M8 2h8a2 2 0 012 2v16l-6-3-6 3V4a2 2 0 012-2z' },
   { to: '/search', label: 'Lookup', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
   { to: '/fire-apparatus', label: 'Apparatus', icon: 'M3 17h18M5 17V9h10v8M15 17V5h4v12M7 13h2' },
@@ -38,6 +41,7 @@ const DISPATCH_NAV = [
   { to: '/department', label: 'Home', icon: 'M3 12l9-9 9 9M4 10v10h5v-6h6v6h5V10' },
   { to: '/dispatch', label: 'Dispatch', icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100-8 4 4 0 000 8zm11 4l-4.35 4.35M17 11h4m-2-2v4' },
   { to: '/search', label: 'Search', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
+  { to: '/incidents', label: 'Incidents', icon: 'M9 12h6m-6 4h6M8 2h8a2 2 0 012 2v16l-6-3-6 3V4a2 2 0 012-2z' },
 ];
 
 const CALL_DETAILS_NAV_ITEM = {
@@ -302,7 +306,7 @@ export default function Sidebar() {
     : navItems;
 
   return (
-    <aside className="w-56 bg-cad-surface border-r border-cad-border flex flex-col h-full">
+    <aside className="cad-app-sidebar-shell w-56 bg-cad-surface border-r border-cad-border flex flex-col h-full">
       {/* Main navigation */}
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {activeDepartment ? (

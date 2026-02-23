@@ -217,13 +217,7 @@ RegisterNetEvent('cad_bridge:startPrintedDocumentJob', function(payload)
     document_subtype = trim(data.document_subtype or ''),
   }
 
-  if triggerNotify({
-    title = 'CAD Printer',
-    description = 'Printing document...',
-    type = 'inform',
-  }) then
-    -- no-op
-  end
+  -- Printing uses the on-screen progress bar only (no ox_lib popup notifications).
 
   CreateThread(function()
     local job = activePrintedDocumentJob

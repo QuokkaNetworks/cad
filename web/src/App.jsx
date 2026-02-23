@@ -14,6 +14,7 @@ import Dispatch from './pages/police/Dispatch';
 import Units from './pages/police/Units';
 import DepartmentHome from './pages/police/DepartmentHome';
 import Search from './pages/police/Search';
+import Incidents from './pages/police/Incidents';
 import BOLOs from './pages/police/BOLOs';
 import Warrants from './pages/police/Warrants';
 import CallDetails from './pages/police/CallDetails';
@@ -61,6 +62,7 @@ export default function App() {
             <Route path="/dispatch" element={<RequireDepartment><Dispatch /></RequireDepartment>} />
             <Route path="/units" element={<RequireDepartment><Units /></RequireDepartment>} />
             <Route path="/search" element={<RequireDepartment><Search /></RequireDepartment>} />
+            <Route path="/incidents" element={<RequireDepartment><Incidents /></RequireDepartment>} />
             <Route path="/records" element={<RequireDepartment><RequireFiveMOnline featureLabel="records"><Records /></RequireFiveMOnline></RequireDepartment>} />
             <Route path="/arrest-reports" element={<RequireDepartment><RequireFiveMOnline featureLabel="arrest reports"><ArrestReports /></RequireFiveMOnline></RequireDepartment>} />
             <Route path="/bolos" element={<RequireDepartment><BOLOs /></RequireDepartment>} />

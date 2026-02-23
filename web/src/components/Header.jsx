@@ -114,7 +114,7 @@ export default function Header() {
   return (
     <header>
       <div className="sillitoe-bar" />
-      <div className="bg-cad-surface border-b border-cad-border px-4 py-3 flex items-center justify-between">
+      <div className="cad-app-header-surface bg-cad-surface border-b border-cad-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-bold text-cad-gold tracking-wide">
             Quokka Networks Emergency Services CAD

@@ -2888,7 +2888,7 @@ local function startPrintedDocumentJob(job)
     if not active then return end
     clearActiveDocumentPrintJob(jobId, active.source_id)
     markPrintJobFailedRemote(jobId, 'Client print confirmation timed out')
-    notifyAlert(sourceId, 'CAD Printer', 'Printing failed or timed out. Please try again.', 'warning')
+    print(('[cad_bridge] printed document job %s timed out for source %s'):format(tostring(jobId), tostring(sourceId)))
   end)
 
   return true, '', false
@@ -2915,9 +2915,9 @@ RegisterNetEvent('cad_bridge:documentPrintJobResult', function(payload)
   if not ok then
     markPrintJobFailedRemote(jobId, errText ~= '' and errText or 'Client cancelled print')
     if errText ~= '' then
-      notifyAlert(src, 'CAD Printer', ('Print cancelled: %s'):format(errText), 'warning')
+      print(('[cad_bridge] printed document job %s cancelled by source %s: %s'):format(tostring(jobId), tostring(src), tostring(errText)))
     else
-      notifyAlert(src, 'CAD Printer', 'Print cancelled.', 'warning')
+      print(('[cad_bridge] printed document job %s cancelled by source %s'):format(tostring(jobId), tostring(src)))
     end
     return
   end
@@ -2935,13 +2935,15 @@ RegisterNetEvent('cad_bridge:documentPrintJobResult', function(payload)
 
   if not addOk then
     markPrintJobFailedRemote(jobId, addErr or 'Inventory add failed')
-    notifyAlert(src, 'CAD Printer', 'Printed document could not be added to inventory.', 'error')
+    print(('[cad_bridge] printed document job %s inventory add failed for source %s: %s'):format(
+      tostring(jobId),
+      tostring(src),
+      tostring(addErr or 'Inventory add failed')
+    ))
     return
   end
 
   markPrintJobSentRemote(jobId)
-  local label = trim(itemMetadata.label or job.title or 'Printed document')
-  notifyAlert(src, 'CAD Printer', ('%s added to your inventory.'):format(label), 'success')
 end)
 
 local function captureAndClearJailInventory(sourceId, citizenId, context)

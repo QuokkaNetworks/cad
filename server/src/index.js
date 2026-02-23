@@ -147,6 +147,7 @@ app.use('/api/bolos', require('./routes/bolos'));
 app.use('/api/warrants', require('./routes/warrants'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/records', require('./routes/records'));
+app.use('/api/incidents', require('./routes/incidents'));
 app.use('/api/medical', require('./routes/medical'));
 app.use('/api/evidence', require('./routes/evidence'));
 app.use('/api/traffic-stops', require('./routes/trafficStops'));

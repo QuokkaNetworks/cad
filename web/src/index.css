@@ -116,6 +116,140 @@
   filter: grayscale(1) brightness(1.9) contrast(1.08);
 }
 
+.cad-app-main-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.cad-app-page-content {
+  min-height: 100%;
+}
+
+.cad-department-theme .cad-app-header-surface {
+  position: relative;
+  background-image:
+    linear-gradient(90deg, rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.16), rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.05) 22%, transparent 48%),
+    linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+  border-bottom-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.2);
+  box-shadow: inset 0 -1px 0 rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.08);
+}
+
+.cad-department-theme .cad-app-sidebar-shell {
+  position: relative;
+  border-right-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.18);
+  background-image:
+    linear-gradient(180deg, rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.15), rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.04) 22%, transparent 40%),
+    linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0));
+}
+
+.cad-department-theme .cad-app-sidebar-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: var(--cad-dept-watermark-image, none);
+  background-repeat: no-repeat;
+  background-position: center 84%;
+  background-size: 150px 150px;
+  opacity: 0.03;
+  filter: grayscale(1) brightness(1.8) contrast(1.05);
+  mask-image: radial-gradient(circle at center, rgba(0,0,0,0.95), transparent 75%);
+  -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,0.95), transparent 75%);
+}
+
+.cad-department-theme .cad-app-main-shell {
+  position: relative;
+  background-image:
+    radial-gradient(circle at 8% 3%, rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.16), transparent 34%),
+    radial-gradient(circle at 96% 10%, rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.08), transparent 38%),
+    linear-gradient(180deg, rgba(255,255,255,0.012), rgba(255,255,255,0));
+}
+
+.cad-department-theme .cad-app-main-shell .bg-cad-card {
+  background-image: linear-gradient(
+    180deg,
+    rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.055),
+    rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.012) 35%,
+    rgba(255,255,255,0) 78%
+  );
+}
+
+.cad-department-theme .cad-app-main-shell .bg-cad-surface {
+  background-image: linear-gradient(
+    180deg,
+    rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.045),
+    rgba(255,255,255,0) 72%
+  );
+}
+
+.cad-department-theme .cad-app-main-shell .border-cad-border {
+  border-color: rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.18);
+}
+
+.cad-department-theme .cad-app-main-overlay {
+  opacity: 1;
+}
+
+.cad-department-theme .cad-app-main-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(255,255,255,0.03) 1px, transparent 0),
+    linear-gradient(180deg, rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.05), transparent 55%);
+  background-size: 18px 18px, 100% 100%;
+  opacity: 0.9;
+}
+
+.cad-department-theme .cad-app-main-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--cad-dept-watermark-image, none);
+  background-repeat: no-repeat;
+  background-position: center 42%;
+  background-size: min(52vw, 520px);
+  opacity: 0.035;
+  filter: grayscale(1) brightness(1.95) contrast(1.08);
+  mask-image: radial-gradient(circle at center, rgba(0,0,0,0.96), rgba(0,0,0,0.68) 40%, transparent 80%);
+  -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,0.96), rgba(0,0,0,0.68) 40%, transparent 80%);
+}
+
+.cad-department-theme .cad-app-page-content::before {
+  content: "";
+  position: fixed;
+  left: 14rem;
+  right: 0;
+  top: calc(6px + 56px);
+  height: 3px;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.55),
+    rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.16) 24%,
+    rgba(var(--cad-dept-accent-rgb, 0, 82, 194), 0.03) 52%,
+    transparent 80%);
+  z-index: 1;
+}
+
+.cad-department-theme .cad-app-page-content > * {
+  position: relative;
+  z-index: 2;
+}
+
+@media (max-width: 1024px) {
+  .cad-department-theme .cad-app-page-content::before {
+    left: 0;
+  }
+
+  .cad-department-theme .cad-app-main-overlay::after {
+    background-size: min(70vw, 420px);
+    background-position: center 30%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cad-orb-float-a,
   .cad-orb-float-b,
