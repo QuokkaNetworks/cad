@@ -16,6 +16,7 @@ const bus = require('../utils/eventBus');
 let client = null;
 const ADMIN_DISCORD_ROLE_ID = '1472592662103064617';
 let roleSyncInterval = null;
+let roleSyncIntervalMinutes = 0;
 
 function toBool(value, fallback = false) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -59,6 +60,17 @@ function isJobSyncEnabled() {
 
 function isGameToDiscordJobSyncEnabled() {
   return toBool(Settings.get('fivem_bridge_job_sync_reverse_enabled'), true);
+}
+
+function getPeriodicRoleSyncMinutes() {
+  const fromSettingsRaw = Settings.get('discord_periodic_sync_minutes');
+  const fromSettings = Number(fromSettingsRaw);
+  if (Number.isFinite(fromSettings)) {
+    return Math.max(0, Math.trunc(fromSettings));
+  }
+  const fromConfig = Number(config.discord.periodicSyncMinutes || 0);
+  if (!Number.isFinite(fromConfig)) return 0;
+  return Math.max(0, Math.trunc(fromConfig));
 }
 
 function normalizeJobNameKey(value) {
@@ -459,17 +471,42 @@ async function startBot() {
 }
 
 function startPeriodicRoleSync() {
-  const minutes = Number(config.discord.periodicSyncMinutes || 0);
-  if (minutes <= 0) return;
-  if (roleSyncInterval) return;
+  return configurePeriodicRoleSync({ runInitialSync: true });
+}
 
-  syncAllMembers()
-    .then(result => {
-      console.log(`[Discord] Initial role sync complete: ${result.synced} synced, ${result.skipped} skipped`);
-    })
-    .catch(err => {
-      console.error('[Discord] Initial role sync failed:', err.message);
-    });
+function stopPeriodicRoleSync() {
+  if (roleSyncInterval) {
+    clearInterval(roleSyncInterval);
+    roleSyncInterval = null;
+  }
+  roleSyncIntervalMinutes = 0;
+}
+
+function configurePeriodicRoleSync({ runInitialSync = false } = {}) {
+  const minutes = getPeriodicRoleSyncMinutes();
+  if (minutes <= 0) {
+    if (roleSyncInterval) {
+      stopPeriodicRoleSync();
+      console.log('[Discord] Periodic role sync disabled');
+    }
+    return { enabled: false, minutes: 0 };
+  }
+
+  if (roleSyncInterval && roleSyncIntervalMinutes === minutes) {
+    return { enabled: true, minutes };
+  }
+
+  stopPeriodicRoleSync();
+
+  if (runInitialSync) {
+    syncAllMembers()
+      .then(result => {
+        console.log(`[Discord] Initial role sync complete: ${result.synced} synced, ${result.skipped} skipped`);
+      })
+      .catch(err => {
+        console.error('[Discord] Initial role sync failed:', err.message);
+      });
+  }
 
   const intervalMs = minutes * 60 * 1000;
   roleSyncInterval = setInterval(async () => {
@@ -480,8 +517,15 @@ function startPeriodicRoleSync() {
       console.error('[Discord] Periodic role sync failed:', err.message);
     }
   }, intervalMs);
+  roleSyncIntervalMinutes = minutes;
 
   console.log(`[Discord] Periodic role sync enabled every ${minutes} minute(s)`);
+  return { enabled: true, minutes };
+}
+
+function refreshPeriodicRoleSync() {
+  if (!client) return { enabled: false, minutes: 0, reason: 'bot_not_running' };
+  return configurePeriodicRoleSync({ runInitialSync: false });
 }
 
 async function syncUserRoles(discordId) {
@@ -555,4 +599,11 @@ function getClient() {
   return client;
 }
 
-module.exports = { startBot, syncUserRoles, syncAllMembers, getGuildRoles, getClient };
+module.exports = {
+  startBot,
+  syncUserRoles,
+  syncAllMembers,
+  getGuildRoles,
+  getClient,
+  refreshPeriodicRoleSync,
+};

@@ -698,6 +698,14 @@ router.put('/settings', (req, res) => {
     Settings.set(key, String(value));
   }
   startFiveMResourceAutoSync();
+  try {
+    const { refreshPeriodicRoleSync } = require('../discord/bot');
+    if (typeof refreshPeriodicRoleSync === 'function') {
+      refreshPeriodicRoleSync();
+    }
+  } catch {
+    // Discord bot may not be running; settings still save successfully.
+  }
   audit(req.user.id, 'settings_updated', { keys: Object.keys(settings) });
   res.json(Settings.getAll());
 });

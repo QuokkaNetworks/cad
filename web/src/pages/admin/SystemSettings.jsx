@@ -324,6 +324,40 @@ export default function AdminSystemSettings() {
       </div>
 
       <div className="bg-cad-card border border-cad-border rounded-xl p-6">
+        <h3 className="text-sm font-semibold text-cad-muted uppercase tracking-wider mb-5">Discord Sync</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-cad-muted mb-1">Periodic Discord Sync (minutes)</label>
+            <input
+              type="number"
+              min="0"
+              value={settings.discord_periodic_sync_minutes || ''}
+              onChange={e => updateSetting('discord_periodic_sync_minutes', e.target.value)}
+              className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm focus:outline-none focus:border-cad-accent"
+              placeholder="10"
+            />
+            <p className="text-xs text-cad-muted mt-1">
+              Checks Discord role access sync and job-role sync for linked members on a timer. Set <span className="font-mono">0</span> to disable periodic checks.
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs text-cad-muted mb-1">Reverse Job Role Sync</label>
+            <select
+              value={settings.fivem_bridge_job_sync_reverse_enabled || 'true'}
+              onChange={e => updateSetting('fivem_bridge_job_sync_reverse_enabled', e.target.value)}
+              className="w-full bg-cad-surface border border-cad-border rounded px-3 py-2 text-sm focus:outline-none focus:border-cad-accent"
+            >
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+            <p className="text-xs text-cad-muted mt-1">
+              When enabled, CAD applies/removes Discord roles based on QBox jobs (including multi-character checks).
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-cad-card border border-cad-border rounded-xl p-6">
         <h3 className="text-sm font-semibold text-cad-muted uppercase tracking-wider mb-5">Warrant Community Alerts</h3>
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2">
