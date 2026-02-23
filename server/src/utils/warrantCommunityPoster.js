@@ -32,8 +32,6 @@ const TEMPLATE_TEXT_LAYOUT = Object.freeze({
   wantedForLineHeight: 50,
 });
 
-const TEMPLATE_BASE_BLUE = '#000032';
-
 const TEXT_COLORS = Object.freeze({
   background: '#010049',
   orange: '#ff9f2a',
@@ -282,11 +280,6 @@ function buildPosterFieldOverlaySvg({
     `<text x="${x}" y="${y}" fill="${fill}" font-family="Arial, Helvetica, sans-serif" font-size="${size}" font-weight="${weight}" paint-order="stroke fill" stroke="rgba(0,0,0,0.18)" stroke-width="1.5">${xmlEscape(text)}</text>`
   );
 
-  const labelLine = (text, x, y) => (
-    `<text x="${x}" y="${y}" fill="${TEXT_COLORS.orange}" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="800" paint-order="stroke fill" stroke="rgba(0,0,0,0.18)" stroke-width="1.5">${xmlEscape(text)}</text>`
-  );
-
-  const labelX = TEMPLATE_TEXT_LAYOUT.x;
   const valueX = TEMPLATE_TEXT_LAYOUT.x;
   const topY = TEMPLATE_TEXT_LAYOUT.topY;
   const gapY = TEMPLATE_TEXT_LAYOUT.gapY;
@@ -296,20 +289,6 @@ function buildPosterFieldOverlaySvg({
 
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${POSTER_WIDTH}" height="${POSTER_HEIGHT}" viewBox="0 0 ${POSTER_WIDTH} ${POSTER_HEIGHT}">`,
-    // Clear the large photo area so baked-in sample portrait/placeholder from the template
-    // doesn't show through. Real mugshots/placeholder are composited after this overlay.
-    `<rect x="${PHOTO_FRAME.x + 2}" y="${PHOTO_FRAME.y + 2}" width="${PHOTO_FRAME.width - 4}" height="${PHOTO_FRAME.height - 4}" rx="${Math.max(8, PHOTO_FRAME.radius - 1)}" fill="${TEMPLATE_BASE_BLUE}" />`,
-    // Clear only the dynamic text bands so the template artwork remains intact while
-    // removing any baked-in sample values from the screenshot-based template.
-    `<rect x="${labelX - 10}" y="${topY - 18}" width="364" height="104" fill="${TEMPLATE_BASE_BLUE}" />`,
-    `<rect x="${labelX - 10}" y="${topY + gapY - 18}" width="364" height="104" fill="${TEMPLATE_BASE_BLUE}" />`,
-    `<rect x="${labelX - 10}" y="${topY + (gapY * 2) - 18}" width="364" height="120" fill="${TEMPLATE_BASE_BLUE}" />`,
-    `<rect x="${labelX - 10}" y="${topY + (gapY * 3) - 18}" width="364" height="232" fill="${TEMPLATE_BASE_BLUE}" />`,
-    // Redraw labels aligned to the template positions.
-    labelLine('Name:', labelX, topY),
-    labelLine('Location:', labelX, topY + gapY),
-    labelLine('No. of Warrants:', labelX, topY + (gapY * 2)),
-    labelLine('Wanted for:', labelX, topY + (gapY * 3)),
     ...nameLines.map((value, index) => line(
       value,
       valueX,
@@ -453,17 +432,6 @@ async function renderWantedPoster({
 
   const composites = [];
 
-  if (hasCustomTemplate) {
-    composites.push({
-      input: Buffer.from(buildPosterFieldOverlaySvg({
-        name,
-        location,
-        warrantCount,
-        wantedFor,
-      })),
-    });
-  }
-
   if (hasMugshot) {
     const photo = await sharp(mugshotBuffer)
       .rotate()
@@ -508,6 +476,17 @@ async function renderWantedPoster({
       input: placeholderPhoto,
       left: PHOTO_FRAME.x + 6,
       top: PHOTO_FRAME.y + 6,
+    });
+  }
+
+  if (hasCustomTemplate) {
+    composites.push({
+      input: Buffer.from(buildPosterFieldOverlaySvg({
+        name,
+        location,
+        warrantCount,
+        wantedFor,
+      })),
     });
   }
 
