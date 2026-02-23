@@ -988,27 +988,36 @@ async function getPlayerCharacterJobsByCitizenId(citizenId) {
 
     let rows = [];
     const accountLicense = await getLicenseByCitizenId(normalizedCitizenId).catch(() => null);
-    let usedPrimaryMatch = false;
-    let primaryMatchValue = '';
-    if (accountLicense) {
-      primaryMatchValue = accountLicense;
-    } else if (jobMatchColKey.toLowerCase() === String(citizenIdCol || '').trim().toLowerCase()) {
-      primaryMatchValue = normalizedCitizenId;
+    const matchCandidates = [];
+    if (accountLicense) matchCandidates.push(String(accountLicense).trim());
+    if (normalizedCitizenId && !matchCandidates.includes(normalizedCitizenId)) {
+      matchCandidates.push(normalizedCitizenId);
     }
 
-    if (primaryMatchValue) {
-      usedPrimaryMatch = true;
-      [rows] = await p.query(
+    for (const candidate of matchCandidates) {
+      if (!candidate) continue;
+      const [candidateRows] = await p.query(
         `SELECT * FROM ${tableNameSql} WHERE ${jobMatchColSql} = ?`,
-        [primaryMatchValue]
+        [candidate]
       );
+      if (Array.isArray(candidateRows) && candidateRows.length > 0) {
+        rows = candidateRows;
+        break;
+      }
     }
 
     if (!Array.isArray(rows) || rows.length === 0) {
-      [rows] = await p.query(
-        `SELECT * FROM ${tableNameSql} WHERE ${citizenIdColSql} = ? LIMIT 1`,
-        [normalizedCitizenId]
-      );
+      try {
+        [rows] = await p.query(
+          `SELECT * FROM ${tableNameSql} WHERE ${citizenIdColSql} = ? LIMIT 1`,
+          [normalizedCitizenId]
+        );
+      } catch (fallbackErr) {
+        if (String(fallbackErr?.code || '').trim().toUpperCase() !== 'ER_BAD_FIELD_ERROR') {
+          throw fallbackErr;
+        }
+        rows = [];
+      }
     }
 
     const seen = new Set();
