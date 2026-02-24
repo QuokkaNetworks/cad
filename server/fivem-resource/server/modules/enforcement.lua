@@ -1531,6 +1531,24 @@ local function resolvePlayerSourceForJob(job)
   local byDiscord = findPlayerByIdentifier('discord', job.discord_id)
   if byDiscord then return byDiscord end
 
+  local steamKey = trim(job.steam_id or ''):lower()
+  if steamKey:sub(1, 8) == 'discord:' then
+    local byDiscordSteam = findPlayerByIdentifier('discord', steamKey:sub(9))
+    if byDiscordSteam then return byDiscordSteam end
+  elseif steamKey:sub(1, 6) == 'steam:' then
+    local bySteamPrefixed = findPlayerByIdentifier('steam', steamKey:sub(7))
+    if bySteamPrefixed then return bySteamPrefixed end
+  elseif steamKey:sub(1, 8) == 'license:' then
+    local byLicense = findPlayerByIdentifier('license', steamKey:sub(9))
+    if byLicense then return byLicense end
+  elseif steamKey:sub(1, 9) == 'license2:' then
+    local byLicense2 = findPlayerByIdentifier('license2', steamKey:sub(10))
+    if byLicense2 then return byLicense2 end
+  elseif steamKey ~= '' then
+    local bySteam = findPlayerByIdentifier('steam', steamKey)
+    if bySteam then return bySteam end
+  end
+
   return nil
 end
 

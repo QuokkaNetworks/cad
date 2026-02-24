@@ -2206,7 +2206,18 @@ function queueClosestCallPromptForCall(call, { force = false } = {}) {
   };
 }
 
-function resolveActiveLinkForBridgeJob(job = {}) {
+function resolveActiveLinkForBridgeJob(job = {}, options = {}) {
+  const preferUser = options?.preferUser === true;
+
+  const userId = Number(job.user_id || 0);
+  if (preferUser && userId > 0) {
+    const user = Users.findById(userId);
+    if (user) {
+      const activeLink = chooseActiveLinkForUser(user);
+      if (activeLink) return activeLink;
+    }
+  }
+
   const gameId = String(job.game_id || '').trim();
   if (gameId) {
     const byGameId = findActiveLinkByGameId(gameId);
@@ -2231,7 +2242,6 @@ function resolveActiveLinkForBridgeJob(job = {}) {
     if (bySteam && isActiveFiveMLink(bySteam)) return bySteam;
   }
 
-  const userId = Number(job.user_id || 0);
   if (userId > 0) {
     const user = Users.findById(userId);
     if (user) {
@@ -3395,7 +3405,7 @@ router.post('/fine-jobs/:id/failed', requireBridgeAuth, (req, res) => {
 router.get('/print-jobs', requireBridgeAuth, (req, res) => {
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
   const jobs = FiveMPrintJobs.listPending(limit).map((job) => {
-    const activeLink = resolveActiveLinkForBridgeJob(job);
+    const activeLink = resolveActiveLinkForBridgeJob(job, { preferUser: true });
     return {
       ...job,
       game_id: String(job.game_id || activeLink?.game_id || ''),
