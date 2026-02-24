@@ -8,6 +8,7 @@ const {
 } = require('../db/sqlite');
 const { audit } = require('../utils/audit');
 const FiveMPrintJobs = require('../services/fivemPrintJobs');
+const { buildPrintedDocumentPdfAttachment } = require('../services/printedDocumentPdf');
 const bus = require('../utils/eventBus');
 
 const router = express.Router();
@@ -299,7 +300,7 @@ router.delete('/:id', requireAuth, (req, res) => {
   res.json({ success: true, id: noticeId });
 });
 
-router.post('/:id/print', requireAuth, (req, res) => {
+router.post('/:id/print', requireAuth, async (req, res) => {
   const noticeId = parseInt(req.params.id, 10);
   const notice = InfringementNotices.findById(noticeId);
   if (!notice) return res.status(404).json({ error: 'Infringement notice not found' });
@@ -334,6 +335,19 @@ router.post('/:id/print', requireAuth, (req, res) => {
     details: notice.details || {},
   };
 
+  let metadataWithPdf = metadata;
+  try {
+    const pdfAttachment = await buildPrintedDocumentPdfAttachment({
+      title: `Infringement Notice ${String(notice.notice_number || `#${notice.id}`)}`.slice(0, 120),
+      description: buildPrintDescription(notice),
+      document_subtype: 'ticket',
+      metadata,
+    });
+    metadataWithPdf = { ...metadata, ...pdfAttachment };
+  } catch (err) {
+    console.warn('[cad] Failed generating infringement PDF for print job:', err?.message || err);
+  }
+
   const job = FiveMPrintJobs.create({
     ...buildPrintJobDeliveryTarget(req),
     department_id: Number(unit.department_id || 0) || null,
@@ -341,7 +355,7 @@ router.post('/:id/print', requireAuth, (req, res) => {
     document_subtype: 'ticket',
     title: `Infringement Notice ${String(notice.notice_number || `#${notice.id}`)}`.slice(0, 120),
     description: buildPrintDescription(notice),
-    metadata,
+    metadata: metadataWithPdf,
   });
 
   InfringementNotices.markPrintIssued(noticeId, { print_job_id: Number(job.id || 0) });

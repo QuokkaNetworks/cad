@@ -12,6 +12,7 @@ const {
 const { audit } = require('../utils/audit');
 const { processPendingFineJobs } = require('../services/fivemFineProcessor');
 const FiveMPrintJobs = require('../services/fivemPrintJobs');
+const { buildPrintedDocumentPdfAttachment } = require('../services/printedDocumentPdf');
 
 const router = express.Router();
 const VALID_RECORD_TYPES = new Set(['charge', 'fine', 'warning', 'arrest_report']);
@@ -598,7 +599,7 @@ router.post('/:id/finalize-arrest-report', requireAuth, (req, res) => {
   });
 });
 
-router.post('/:id/print', requireAuth, (req, res) => {
+router.post('/:id/print', requireAuth, async (req, res) => {
   const recordId = parseInt(req.params.id, 10);
   if (!Number.isInteger(recordId) || recordId <= 0) {
     return res.status(400).json({ error: 'Invalid record id' });
@@ -637,14 +638,29 @@ router.post('/:id/print', requireAuth, (req, res) => {
     issued_at: new Date().toISOString(),
   };
 
+  const printTitle = subtype === 'ticket' ? `Printed Ticket #${record.id}` : `Printed Warning #${record.id}`;
+  const printDescription = buildPrintedRecordDescription(record);
+  let metadataWithPdf = metadata;
+  try {
+    const pdfAttachment = await buildPrintedDocumentPdfAttachment({
+      title: printTitle,
+      description: printDescription,
+      document_subtype: subtype,
+      metadata,
+    });
+    metadataWithPdf = { ...metadata, ...pdfAttachment };
+  } catch (err) {
+    console.warn('[cad] Failed generating record print PDF:', err?.message || err);
+  }
+
   const job = FiveMPrintJobs.create({
     ...buildPrintJobDeliveryTarget(req),
     department_id: Number(unit.department_id || 0) || null,
     document_type: 'cad_document',
     document_subtype: subtype,
-    title: subtype === 'ticket' ? `Printed Ticket #${record.id}` : `Printed Warning #${record.id}`,
-    description: buildPrintedRecordDescription(record),
-    metadata,
+    title: printTitle,
+    description: printDescription,
+    metadata: metadataWithPdf,
   });
 
   audit(req.user.id, 'record_print_job_created', {

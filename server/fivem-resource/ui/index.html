@@ -205,22 +205,30 @@
       </section>
     </div>
 
-    <div id="printedDocOverlay" class="overlay hidden" aria-hidden="true">
-      <section class="panel panel-printed-doc" role="dialog" aria-modal="true" aria-labelledby="printedDoc-title">
-        <header class="panel-header">
-          <div class="eyebrow">CAD Printed Document</div>
-          <button id="printedDocCloseBtn" class="icon-btn" type="button" aria-label="Close">x</button>
+    <div id="printedDocOverlay" class="printed-doc-overlay hidden" aria-hidden="true">
+      <section class="printed-doc-popup" role="dialog" aria-modal="false" aria-labelledby="printedDoc-title">
+        <header class="printed-doc-popup-header">
+          <div class="printed-doc-title-wrap">
+            <div class="eyebrow">CAD Printed Document</div>
+            <h2 id="printedDoc-title" class="printed-doc-popup-title">Printed Document</h2>
+            <p id="printedDocSubtitle" class="printed-doc-popup-subtitle">Issued via CAD</p>
+          </div>
+          <div class="printed-doc-toolbar">
+            <span id="printedDocType" class="printed-doc-type">Document</span>
+            <button id="printedDocZoomOutBtn" class="icon-btn printed-doc-zoom-btn" type="button" aria-label="Zoom out">-</button>
+            <button id="printedDocZoomResetBtn" class="icon-btn printed-doc-zoom-btn" type="button" aria-label="Fit to width">Fit</button>
+            <button id="printedDocZoomInBtn" class="icon-btn printed-doc-zoom-btn" type="button" aria-label="Zoom in">+</button>
+            <div id="printedDocZoomLabel" class="printed-doc-zoom-label">100%</div>
+            <button id="printedDocCloseBtn" class="icon-btn" type="button" aria-label="Close">x</button>
+          </div>
         </header>
 
-        <div class="printed-doc-title-row">
-          <div>
-            <h1 id="printedDoc-title">Printed Document</h1>
-            <p id="printedDocSubtitle" class="subtitle">Issued via CAD</p>
-          </div>
-          <div id="printedDocType" class="printed-doc-type">Document</div>
+        <div id="printedDocPdfStatus" class="printed-doc-pdf-status hidden"></div>
+        <div id="printedDocPdfViewport" class="printed-doc-pdf-viewport">
+          <div id="printedDocPdfPages" class="printed-doc-pdf-pages"></div>
         </div>
 
-        <section class="printed-doc-paper">
+        <section id="printedDocFallback" class="printed-doc-paper hidden">
           <div class="printed-doc-meta-grid">
             <div class="printed-doc-meta-row">
               <span class="printed-doc-meta-label">Subject</span>
@@ -268,8 +276,9 @@
           </div>
         </section>
 
-        <footer class="actions">
-          <button id="printedDocCancelBtn" class="btn btn-ghost" type="button">Close</button>
+        <footer class="printed-doc-popup-footer">
+          <div id="printedDocQuickReference" class="printed-doc-popup-reference">N/A</div>
+          <button id="printedDocCancelBtn" class="btn btn-ghost printed-doc-close-btn" type="button">Close</button>
         </footer>
       </section>
     </div>
@@ -443,6 +452,7 @@
 
     <div id="app"></div>
 
+    <script src="vendor/pdf.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

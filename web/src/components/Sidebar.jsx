@@ -50,7 +50,11 @@ const CALL_DETAILS_NAV_ITEM = {
   label: 'Call Details',
   icon: 'M9 12h6m-6 4h6M8 2h8a2 2 0 012 2v16l-6-3-6 3V4a2 2 0 012-2z',
 };
-const DUTY_REQUIRED_ROUTES = new Set(['/units', '/dispatch']);
+function requiresOnDutyForNavItem(item) {
+  const route = String(item?.to || '').trim();
+  if (!route) return false;
+  return route !== '/department';
+}
 
 function requiresFiveMOnlineForNavItem(item) {
   return item?.to === '/incidents'
@@ -351,7 +355,7 @@ export default function Sidebar() {
   const hiddenInGameNavText = formatHiddenNavLabels(hiddenInGameNavLabels);
 
   const navItems = baseNavItems.filter((item) => {
-    if (DUTY_REQUIRED_ROUTES.has(item.to) && !isOnDutyForActiveDepartment) return false;
+    if (requiresOnDutyForNavItem(item) && !isOnDutyForActiveDepartment) return false;
     if (requiresFiveMOnlineForNavItem(item) && hideInGameProtectedItems) return false;
     return true;
   });

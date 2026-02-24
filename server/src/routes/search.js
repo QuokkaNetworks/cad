@@ -13,6 +13,7 @@ const {
 const { audit } = require('../utils/audit');
 const qbox = require('../db/qbox');
 const FiveMPrintJobs = require('../services/fivemPrintJobs');
+const { buildPrintedDocumentPdfAttachment } = require('../services/printedDocumentPdf');
 
 const router = express.Router();
 const DRIVER_LICENSE_STATUSES = new Set(['valid', 'suspended', 'disqualified', 'expired']);
@@ -686,7 +687,7 @@ router.patch('/warnings/:id', requireAuth, (req, res) => {
   res.json(updated);
 });
 
-router.post('/warnings/:id/print', requireAuth, requireFiveMOnline, (req, res) => {
+router.post('/warnings/:id/print', requireAuth, requireFiveMOnline, async (req, res) => {
   const warningId = parseInt(req.params.id, 10);
   if (!Number.isInteger(warningId) || warningId <= 0) {
     return res.status(400).json({ error: 'Invalid warning id' });
@@ -714,14 +715,29 @@ router.post('/warnings/:id/print', requireAuth, requireFiveMOnline, (req, res) =
     issued_at: new Date().toISOString(),
   };
 
+  const printTitle = `Printed Warning #${warning.id}`;
+  const printDescription = buildWarningPrintDescription(warning);
+  let metadataWithPdf = metadata;
+  try {
+    const pdfAttachment = await buildPrintedDocumentPdfAttachment({
+      title: printTitle,
+      description: printDescription,
+      document_subtype: 'written_warning',
+      metadata,
+    });
+    metadataWithPdf = { ...metadata, ...pdfAttachment };
+  } catch (err) {
+    console.warn('[cad] Failed generating warning PDF:', err?.message || err);
+  }
+
   const job = FiveMPrintJobs.create({
     ...buildPrintJobDeliveryTarget(req),
     department_id: Number(unit.department_id || 0) || null,
     document_type: 'cad_document',
     document_subtype: 'written_warning',
-    title: `Printed Warning #${warning.id}`,
-    description: buildWarningPrintDescription(warning),
-    metadata,
+    title: printTitle,
+    description: printDescription,
+    metadata: metadataWithPdf,
   });
 
   audit(req.user.id, 'warning_print_job_created', {

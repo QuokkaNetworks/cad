@@ -28,6 +28,7 @@ files {
   'ui/license-card.html',
   'ui/styles.css',
   'ui/app.js',
+  'ui/vendor/pdf.min.js',
   'ui/overlay.webp',
   'ui/vicroads-logo.png',
 }
