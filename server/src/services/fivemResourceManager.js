@@ -4,12 +4,25 @@ const crypto = require('crypto');
 const { Settings } = require('../db/sqlite');
 
 const RESOURCE_NAME = 'cad_bridge';
+const RESOURCE_CATEGORY_NAME = '[quokkacad]';
 const RESOURCE_TEMPLATES = [
   {
     resourceName: 'cad_bridge',
     templateDir: path.resolve(__dirname, '../../fivem-resource'),
     versionFileName: '.cad_bridge_version',
     needsRuntimeConfig: true,
+  },
+  {
+    resourceName: 'npwd_vicroads',
+    templateDir: path.resolve(__dirname, '../../../npwd_vicroads'),
+    versionFileName: '.npwd_vicroads_version',
+    needsRuntimeConfig: false,
+  },
+  {
+    resourceName: 'npwd_fines_victoria',
+    templateDir: path.resolve(__dirname, '../../../npwd_fines_victoria'),
+    versionFileName: '.npwd_fines_victoria_version',
+    needsRuntimeConfig: false,
   },
 ];
 
@@ -81,6 +94,12 @@ function buildTemplateHash(rootDir) {
 function resolveTargetDir(resourceName) {
   const { installPath } = getConfig();
   if (!installPath) throw new Error('fivem_bridge_install_path is not configured');
+  return path.join(path.resolve(installPath), RESOURCE_CATEGORY_NAME, resourceName);
+}
+
+function resolveLegacyStandaloneTargetDir(resourceName) {
+  const { installPath } = getConfig();
+  if (!installPath) throw new Error('fivem_bridge_install_path is not configured');
   return path.join(path.resolve(installPath), resourceName);
 }
 
@@ -139,8 +158,54 @@ function readInstalledVersion(targetDir, fileName) {
   }
 }
 
+function removeLegacyStandaloneCadBridgeIfManaged() {
+  let legacyDir = '';
+  try {
+    legacyDir = resolveLegacyStandaloneTargetDir('cad_bridge');
+  } catch {
+    return;
+  }
+  if (!legacyDir || !fs.existsSync(legacyDir)) return;
+
+  const versionMarker = path.join(legacyDir, '.cad_bridge_version');
+  const configPath = path.join(legacyDir, 'config.cfg');
+  const manifestPath = path.join(legacyDir, 'fxmanifest.lua');
+  if (!fs.existsSync(manifestPath) || !fs.existsSync(versionMarker)) return;
+
+  // Preserve any runtime config before removing the legacy folder.
+  let legacyConfig = '';
+  try {
+    if (fs.existsSync(configPath)) legacyConfig = fs.readFileSync(configPath, 'utf8');
+  } catch {
+    legacyConfig = '';
+  }
+
+  try {
+    fs.rmSync(legacyDir, { recursive: true, force: true });
+    console.log(`[FiveMBridge] Removed legacy standalone cad_bridge resource at ${legacyDir}`);
+  } catch (err) {
+    console.warn(`[FiveMBridge] Could not remove legacy standalone cad_bridge at ${legacyDir}: ${err.message}`);
+    return;
+  }
+
+  if (legacyConfig) {
+    try {
+      const newConfigPath = path.join(resolveTargetDir('cad_bridge'), 'config.cfg');
+      if (fs.existsSync(newConfigPath)) {
+        fs.writeFileSync(newConfigPath, legacyConfig, 'utf8');
+      }
+    } catch {
+      // Runtime config is re-applied below anyway; ignore copy issues.
+    }
+  }
+}
+
 function installOrUpdateResource() {
+  const cfg = getConfig();
+  if (!cfg.installPath) throw new Error('fivem_bridge_install_path is not configured');
   const resources = [];
+  const categoryDir = path.join(path.resolve(cfg.installPath), RESOURCE_CATEGORY_NAME);
+  fs.mkdirSync(categoryDir, { recursive: true });
 
   for (const resource of RESOURCE_TEMPLATES) {
     ensureTemplateExists(resource.templateDir, resource.resourceName);
@@ -169,9 +234,13 @@ function installOrUpdateResource() {
     });
   }
 
+  removeLegacyStandaloneCadBridgeIfManaged();
+
   const primary = resources.find(item => item.resourceName === RESOURCE_NAME) || resources[0];
   return {
     resourceName: RESOURCE_NAME,
+    resourceCategoryName: RESOURCE_CATEGORY_NAME,
+    resourceCategoryDir: categoryDir,
     targetDir: primary?.targetDir || '',
     version: primary?.version || '',
     resources,
@@ -182,6 +251,7 @@ function getStatus() {
   const cfg = getConfig();
   const resources = [];
   let combinedError = '';
+  let resourceCategoryDir = '';
 
   for (const resource of RESOURCE_TEMPLATES) {
     let installed = false;
@@ -195,6 +265,7 @@ function getStatus() {
       ensureTemplateExists(resource.templateDir, resource.resourceName);
       templateVersion = buildTemplateHash(resource.templateDir);
       if (cfg.installPath) {
+        resourceCategoryDir = path.join(path.resolve(cfg.installPath), RESOURCE_CATEGORY_NAME);
         targetDir = resolveTargetDir(resource.resourceName);
         installed = resourceHasManifest(targetDir);
         if (installed) {
@@ -223,6 +294,8 @@ function getStatus() {
     enabled: cfg.enabled,
     autoUpdate: cfg.autoUpdate,
     installPath: cfg.installPath,
+    resourceCategoryName: RESOURCE_CATEGORY_NAME,
+    resourceCategoryDir,
     syncIntervalMinutes: cfg.syncIntervalMinutes,
     resourceName: RESOURCE_NAME,
     targetDir: primary.targetDir || '',
@@ -257,7 +330,7 @@ function startFiveMResourceAutoSync() {
       if (outOfDate || resources.length === 0) {
         const result = installOrUpdateResource();
         const targets = (result.resources || []).map(item => item.targetDir).filter(Boolean);
-        console.log(`[FiveMBridge] Resource sync complete: ${targets.join(', ') || result.targetDir}`);
+        console.log(`[FiveMBridge] Resource sync complete (${result.resourceCategoryName || RESOURCE_CATEGORY_NAME}): ${targets.join(', ') || result.targetDir}`);
       } else {
         const bridgeResource = resources.find(item => item.resourceName === RESOURCE_NAME);
         if (bridgeResource?.targetDir) {
@@ -277,6 +350,7 @@ function startFiveMResourceAutoSync() {
 
 module.exports = {
   RESOURCE_NAME,
+  RESOURCE_CATEGORY_NAME,
   installOrUpdateResource,
   getStatus,
   startFiveMResourceAutoSync,

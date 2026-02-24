@@ -205,7 +205,7 @@ export default function AdminSystemSettings() {
               placeholder="e.g. C:\\txData\\YourServer\\resources\\[cad]"
             />
             <p className="text-xs text-cad-muted mt-1">
-              CAD will install/update a resource folder named <span className="font-mono">cad_bridge</span> in this directory.
+              CAD will install/update a resource category folder named <span className="font-mono">[quokkacad]</span> in this directory, containing <span className="font-mono">cad_bridge</span>, <span className="font-mono">npwd_vicroads</span>, and <span className="font-mono">npwd_fines_victoria</span>.
             </p>
           </div>
           <div className="col-span-2">
@@ -218,7 +218,7 @@ export default function AdminSystemSettings() {
               placeholder="http://127.0.0.1:3031"
             />
             <p className="text-xs text-cad-muted mt-1">
-              Used as the default CAD endpoint inside the installed <span className="font-mono">cad_bridge</span> resource. Port 3031 is the plain HTTP bridge port (FiveM cannot use HTTPS with self-signed certs).
+              Used as the default CAD endpoint inside the installed <span className="font-mono">[quokkacad]/cad_bridge</span> resource. Port 3031 is the plain HTTP bridge port (FiveM cannot use HTTPS with self-signed certs).
             </p>
           </div>
           <div className="col-span-2">
