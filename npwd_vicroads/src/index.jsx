@@ -2,19 +2,10 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 
-function isCfxNuiHost() {
-  try {
-    const host = String(window?.location?.hostname || '').toLowerCase();
-    return host.startsWith('cfx-nui-');
-  } catch {
-    return false;
-  }
-}
-
 const rootNode = document.getElementById('root');
-if (isCfxNuiHost()) {
-  // NPWD loads this resource to access the remote module; do not render the app
-  // into the standalone resource page or it will leak behind the phone UI.
+if (import.meta.env.PROD) {
+  // In production, NPWD loads the federated module (npwd.config.js -> app: App).
+  // Rendering the standalone index page here causes the app UI to leak outside the phone.
   document.documentElement.style.background = 'transparent';
   document.body.style.background = 'transparent';
   document.body.style.margin = '0';
