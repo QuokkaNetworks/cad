@@ -484,6 +484,7 @@ async function syncJobRolesFromGame(user, member, mappings) {
 }
 
 async function syncLinkedUserAccess(user, member, mappings) {
+  const usernameSync = syncDiscordUsername(user, member);
   const reverseJobSync = await syncJobRolesFromGame(user, member, mappings);
   const nicknameSync = await syncCharacterNameNickname(user, member);
   const memberRoleIds = new Set(member.roles.cache.map(r => r.id));
@@ -539,6 +540,7 @@ async function syncLinkedUserAccess(user, member, mappings) {
   });
 
   return {
+    username_sync: usernameSync,
     is_admin: newIsAdmin,
     departments: newDepts,
     sub_departments: newSubDepts,
@@ -546,6 +548,28 @@ async function syncLinkedUserAccess(user, member, mappings) {
     nickname_sync: nicknameSync,
     queued_job_sync_id: queuedJob?.id || null,
   };
+}
+
+function syncDiscordUsername(user, member) {
+  const latestUsername = String(member?.user?.username || '').trim();
+  const currentUsername = String(user?.discord_name || '').trim();
+
+  if (!latestUsername) {
+    return { changed: false, reason: 'missing_username' };
+  }
+
+  if (currentUsername === latestUsername) {
+    return { changed: false, reason: 'already_synced', username: latestUsername };
+  }
+
+  Users.update(user.id, { discord_name: latestUsername });
+  audit(user.id, 'discord_username_sync', {
+    discordId: user.discord_id,
+    before: currentUsername,
+    after: latestUsername,
+  });
+
+  return { changed: true, reason: 'synced', username: latestUsername };
 }
 
 function formatCharacterFullName(character) {
@@ -751,6 +775,7 @@ async function syncUserRoles(discordId) {
 
   return {
     synced: true,
+    username_sync: synced.username_sync,
     is_admin: synced.is_admin,
     departments: synced.departments.map(d => d.short_name),
     sub_departments: synced.sub_departments.map(d => d.short_name),
