@@ -2662,7 +2662,7 @@ local function addInventoryItemForJailRestore(sourceId, item, playerObject)
     if lastAdapterErr ~= '' then
       suffix = (': %s'):format(lastAdapterErr)
     elseif name:lower() == 'paper' then
-      suffix = ' (item may not exist; set cad_bridge_printed_ticket_item_name to an item that exists in your inventory)'
+      suffix = ' (item may not exist; set cad_bridge_printed_ticket_item_name in server.cfg or server/fivem-resource/config.cfg to an item that exists in your inventory)'
     else
       suffix = ' (item may not exist in your inventory/shared items)'
     end

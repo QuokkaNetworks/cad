@@ -92,9 +92,16 @@ local function loadResourceConfig()
 end
 
 local ResourceConfigValues, ResourceConfigHasKey = loadResourceConfig()
+local MISSING_CONVAR_SENTINEL = '__cad_bridge_missing_convar__'
 
 local function getString(key, fallback)
   local lookup = trim(key)
+  if lookup ~= '' then
+    local convarValue = GetConvar(lookup, MISSING_CONVAR_SENTINEL)
+    if convarValue ~= MISSING_CONVAR_SENTINEL then
+      return tostring(convarValue or '')
+    end
+  end
   if lookup ~= '' and ResourceConfigHasKey[lookup] then
     return tostring(ResourceConfigValues[lookup] or '')
   end
