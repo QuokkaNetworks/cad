@@ -535,7 +535,8 @@ export default function DispatchMap() {
   }
 
   function handleMapWheel(event) {
-    event.preventDefault();
+    if (event.cancelable) event.preventDefault();
+    event.stopPropagation();
     const point = getViewportRelativePoint(event);
     if (!point) return;
     const wheelDelta = Math.sign(event.deltaY);
@@ -632,13 +633,13 @@ export default function DispatchMap() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="bg-cad-card border border-cad-border rounded-lg p-5">
+    <div className="h-[calc(100vh-56px)] min-h-0 flex flex-col gap-4 overflow-hidden">
+      <div className="bg-cad-card border border-cad-border rounded-lg p-4 flex-none">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="text-xs uppercase tracking-wide text-cad-muted">Dispatch Operations</div>
-            <h1 className="text-2xl font-bold mt-1">AVL Map</h1>
-            <p className="text-sm text-cad-muted mt-2 max-w-3xl">
+            <h1 className="text-xl font-bold mt-1">AVL Map</h1>
+            <p className="text-xs sm:text-sm text-cad-muted mt-1.5 max-w-3xl">
               Live unit positions, call pins, pursuit overlays, and alarm zones for dispatch coordination.
               {isDispatch ? '' : ' This view is primarily intended for dispatch centres.'}
             </p>
@@ -663,28 +664,28 @@ export default function DispatchMap() {
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-3">
           <div className="rounded-md border border-cad-border bg-cad-surface px-3 py-2">
             <div className="text-xs text-cad-muted uppercase tracking-wide">Units on Map</div>
-            <div className="text-xl font-semibold mt-1">{unitMarkers.length}</div>
+            <div className="text-lg font-semibold mt-0.5">{unitMarkers.length}</div>
           </div>
           <div className="rounded-md border border-cad-border bg-cad-surface px-3 py-2">
             <div className="text-xs text-cad-muted uppercase tracking-wide">Active Calls</div>
-            <div className="text-xl font-semibold mt-1">{filteredCalls.length}</div>
+            <div className="text-lg font-semibold mt-0.5">{filteredCalls.length}</div>
           </div>
           <div className="rounded-md border border-cad-border bg-cad-surface px-3 py-2">
             <div className="text-xs text-cad-muted uppercase tracking-wide">Alarm Zones</div>
-            <div className="text-xl font-semibold mt-1">{filteredZones.length}</div>
+            <div className="text-lg font-semibold mt-0.5">{filteredZones.length}</div>
           </div>
           <div className="rounded-md border border-cad-border bg-cad-surface px-3 py-2">
             <div className="text-xs text-cad-muted uppercase tracking-wide">Last Refresh</div>
-            <div className="text-sm font-medium mt-1">{lastLoadedAt ? formatRelativeAge(lastLoadedAt) : (loading ? 'Loading...' : '-')}</div>
+            <div className="text-xs sm:text-sm font-medium mt-0.5">{lastLoadedAt ? formatRelativeAge(lastLoadedAt) : (loading ? 'Loading...' : '-')}</div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.65fr)_420px] gap-5">
-        <div className="bg-cad-card border border-cad-border rounded-lg overflow-hidden">
+      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.65fr)_420px] gap-4 flex-1 min-h-0">
+        <div className="bg-cad-card border border-cad-border rounded-lg overflow-hidden flex flex-col min-h-0">
           <div className="px-4 py-3 border-b border-cad-border flex items-center justify-between gap-3">
             <div className="font-semibold">Dispatch Area Map</div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -695,7 +696,7 @@ export default function DispatchMap() {
             </div>
           </div>
           {error ? <div className="px-4 pt-4 text-sm text-rose-300">{error}</div> : null}
-          <div className="p-4">
+          <div className="p-4 flex-1 min-h-0 flex flex-col">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 {[
@@ -746,15 +747,21 @@ export default function DispatchMap() {
               Drag to pan. Use mouse wheel to zoom. Coordinates below use GTA/FiveM world bounds mapped to the pause-map 2x3 tile grid.
             </div>
 
-            <div className="relative rounded-lg border border-cad-border bg-gradient-to-b from-slate-950 to-slate-900 overflow-hidden">
+            <div className="relative rounded-lg border border-cad-border bg-gradient-to-b from-slate-950 to-slate-900 overflow-hidden flex-1 min-h-0">
               <div className="absolute left-4 top-3 z-20 text-xs tracking-wide uppercase text-cad-muted bg-black/30 border border-white/10 rounded px-2 py-1">
                 Blaine County / Los Santos
               </div>
+              <div className="absolute inset-0 p-2 sm:p-3">
+                <div className="relative h-full w-full flex items-center justify-center">
               <div
                 ref={mapViewportRef}
-                className="relative w-full max-w-full mx-auto overflow-hidden"
-                style={{ aspectRatio: `${MAP_CANVAS_WIDTH} / ${MAP_CANVAS_HEIGHT}`, touchAction: 'none' }}
-                onWheel={handleMapWheel}
+                className="relative h-full max-h-full w-auto max-w-full mx-auto overflow-hidden"
+                style={{
+                  aspectRatio: `${MAP_CANVAS_WIDTH} / ${MAP_CANVAS_HEIGHT}`,
+                  touchAction: 'none',
+                  overscrollBehavior: 'contain',
+                }}
+                onWheelCapture={handleMapWheel}
                 onPointerDown={handleMapPointerDown}
                 onPointerMove={handleMapPointerMove}
                 onPointerUp={endMapPointerInteraction}
@@ -866,6 +873,8 @@ export default function DispatchMap() {
                   </svg>
                 </div>
               </div>
+                </div>
+              </div>
               <div className="absolute left-3 bottom-3 text-xs text-cad-muted bg-black/35 border border-white/10 rounded px-2 py-1">
                 {cursorWorld
                   ? `X ${Math.round(cursorWorld.x)} | Y ${Math.round(cursorWorld.y)}`
@@ -878,13 +887,13 @@ export default function DispatchMap() {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="bg-cad-card border border-cad-border rounded-lg overflow-hidden">
+        <div className="grid grid-rows-2 gap-4 min-h-0">
+          <div className="bg-cad-card border border-cad-border rounded-lg overflow-hidden flex flex-col min-h-0">
             <div className="px-4 py-3 border-b border-cad-border flex items-center justify-between">
               <div className="font-semibold">Active Calls</div>
               <div className="text-xs text-cad-muted">{filteredCalls.length}</div>
             </div>
-            <div className="max-h-[36vh] overflow-y-auto p-3 space-y-2">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
               {filteredCalls.length === 0 ? <div className="text-sm text-cad-muted px-1 py-2">No active calls in view.</div> : null}
               {filteredCalls.map((call) => (
                 <button
@@ -913,12 +922,12 @@ export default function DispatchMap() {
             </div>
           </div>
 
-          <div className="bg-cad-card border border-cad-border rounded-lg overflow-hidden">
+          <div className="bg-cad-card border border-cad-border rounded-lg overflow-hidden flex flex-col min-h-0">
             <div className="px-4 py-3 border-b border-cad-border flex items-center justify-between">
               <div className="font-semibold">Units</div>
               <div className="text-xs text-cad-muted">{filteredUnits.length}</div>
             </div>
-            <div className="max-h-[36vh] overflow-y-auto p-3 space-y-2">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
               {filteredUnits.length === 0 ? <div className="text-sm text-cad-muted px-1 py-2">No units in view.</div> : null}
               {filteredUnits.map((unit) => (
                 <button
@@ -949,7 +958,12 @@ export default function DispatchMap() {
       </div>
 
       {(selectedCall || selectedUnit) ? (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <details className="flex-none bg-cad-card border border-cad-border rounded-lg overflow-hidden">
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold border-b border-cad-border bg-cad-surface/30">
+            Selection Inspector ({selectedCall ? 'Call' : 'No Call'} / {selectedUnit ? 'Unit' : 'No Unit'})
+          </summary>
+          <div className="p-4 max-h-[28vh] overflow-y-auto">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="bg-cad-card border border-cad-border rounded-lg p-4">
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-semibold">Selected Call</h3>
@@ -1014,7 +1028,9 @@ export default function DispatchMap() {
               </div>
             )}
           </div>
-        </div>
+            </div>
+          </div>
+        </details>
       ) : null}
     </div>
   );
