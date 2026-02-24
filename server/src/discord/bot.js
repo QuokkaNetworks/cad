@@ -593,6 +593,7 @@ async function syncCharacterNameNickname(user, member) {
   }
 
   let resolvedCharacter = null;
+  let resolvedLicense = '';
   for (const citizenId of citizenIdCandidates) {
     try {
       const character = await qbox.getCharacterById(citizenId);
@@ -602,6 +603,7 @@ async function syncCharacterNameNickname(user, member) {
         citizenId,
         fullName,
       };
+      resolvedLicense = String(await qbox.getLicenseByCitizenId(citizenId) || '').trim();
       break;
     } catch (err) {
       const msg = String(err?.message || err || 'Unknown QBX lookup error');
@@ -618,31 +620,48 @@ async function syncCharacterNameNickname(user, member) {
     };
   }
 
+  let nickname = resolvedCharacter.fullName;
+  if (resolvedLicense) {
+    try {
+      const linkedCharacters = await qbox.getCharactersByLicense(resolvedLicense);
+      const names = linkedCharacters
+        .map((character) => formatCharacterFullName(character))
+        .filter(Boolean)
+        .slice(0, 2);
+      if (names.length > 1) {
+        nickname = `${names[0]} / ${names[1]}`.slice(0, 32).trim();
+      }
+    } catch (err) {
+      const msg = String(err?.message || err || 'Unknown QBX license lookup error');
+      console.warn(`[Discord] License character lookup failed for user ${user.id} (${resolvedLicense}): ${msg}`);
+    }
+  }
+
   const currentNickname = String(member.nickname || '').trim();
-  if (currentNickname === resolvedCharacter.fullName) {
+  if (currentNickname === nickname) {
     return {
       enabled: true,
       changed: false,
       reason: 'already_synced',
       citizen_id: resolvedCharacter.citizenId,
-      nickname: resolvedCharacter.fullName,
+      nickname,
     };
   }
 
   try {
-    await member.setNickname(resolvedCharacter.fullName, 'CAD QBox character name sync');
+    await member.setNickname(nickname, 'CAD QBox character name sync');
     audit(user.id, 'discord_nickname_sync_from_qbox', {
       discordId: user.discord_id,
       citizen_id: resolvedCharacter.citizenId,
       before: currentNickname,
-      after: resolvedCharacter.fullName,
+      after: nickname,
     });
     return {
       enabled: true,
       changed: true,
       reason: 'synced',
       citizen_id: resolvedCharacter.citizenId,
-      nickname: resolvedCharacter.fullName,
+      nickname,
     };
   } catch (err) {
     const msg = String(err?.message || err || 'Unknown Discord nickname sync error');
@@ -651,7 +670,7 @@ async function syncCharacterNameNickname(user, member) {
       changed: false,
       reason: 'update_failed',
       citizen_id: resolvedCharacter.citizenId,
-      nickname: resolvedCharacter.fullName,
+      nickname,
       error: msg,
     };
   }

@@ -1360,6 +1360,62 @@ async function getLicenseByCitizenId(citizenId) {
   }
 }
 
+function numericOrInfinity(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+}
+
+function sortCharactersByCreationOrder(a, b) {
+  const aCid = numericOrInfinity(a?.cid);
+  const bCid = numericOrInfinity(b?.cid);
+  if (aCid !== bCid) return aCid - bCid;
+
+  const aCreated = String(a?.created_at || a?.createdAt || '').trim();
+  const bCreated = String(b?.created_at || b?.createdAt || '').trim();
+  if (aCreated && bCreated && aCreated !== bCreated) {
+    return aCreated.localeCompare(bCreated);
+  }
+
+  const aId = numericOrInfinity(a?.id);
+  const bId = numericOrInfinity(b?.id);
+  if (aId !== bId) return aId - bId;
+
+  return String(a?.citizenid || '').localeCompare(String(b?.citizenid || ''));
+}
+
+async function getCharactersByLicense(license) {
+  const normalizedLicense = String(license || '').trim();
+  if (!normalizedLicense) return [];
+
+  try {
+    const p = await getPool();
+    const { playersTable, citizenIdCol, charInfoCol } = getQboxTableConfig();
+    const tableNameSql = escapeIdentifier(playersTable, 'players table');
+    const citizenIdColSql = escapeIdentifier(citizenIdCol, 'citizen ID column');
+    const charInfoColSql = escapeIdentifier(charInfoCol, 'charinfo column');
+
+    const [rows] = await p.query(
+      `SELECT * FROM ${tableNameSql} WHERE license = ?`,
+      [normalizedLicense]
+    );
+
+    return rows.map((row) => {
+      const info = parseMaybeJson(row[charInfoCol]);
+      return {
+        citizenid: String(row[citizenIdCol] || '').trim(),
+        firstname: String(info.firstname || '').trim(),
+        lastname: String(info.lastname || '').trim(),
+        cid: row?.cid,
+        id: row?.id,
+        created_at: row?.created_at,
+      };
+    }).sort(sortCharactersByCreationOrder);
+  } catch (err) {
+    console.error('QBox get characters by license error:', err);
+    throw new Error(`QBox character-by-license lookup error: ${err.message}`);
+  }
+}
+
 module.exports = {
   initPool,
   testConnection,
@@ -1375,4 +1431,5 @@ module.exports = {
   getVehiclesByOwner,
   applyFineByCitizenId,
   getLicenseByCitizenId,
+  getCharactersByLicense,
 };
