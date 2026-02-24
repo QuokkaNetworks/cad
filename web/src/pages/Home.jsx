@@ -223,7 +223,7 @@ export default function Home() {
   }, [user?.steam_name]);
 
   return (
-    <div className="w-full space-y-5 pb-6">
+    <div className="w-full h-full flex flex-col">
       {showRulesPopup ? (
         <RuleUpdatePopup
           rules={{ ...rulesContent, version: effectiveRulesVersion || rulesContent?.version }}
@@ -232,7 +232,7 @@ export default function Home() {
       ) : null}
 
       {rulesOutdated ? (
-        <section className="rounded-2xl border border-red-500/25 bg-red-500/6 px-4 py-3">
+        <section className="mx-4 mt-4 rounded-2xl border border-red-500/25 bg-red-500/6 px-4 py-3 shrink-0">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-[10px] uppercase tracking-[0.18em] text-red-300">Rule amendments/changes/additions</p>
@@ -250,11 +250,11 @@ export default function Home() {
         </section>
       ) : null}
 
-      <section className="relative overflow-hidden min-h-[520px]">
+      <section className={`relative overflow-hidden ${rulesOutdated ? 'min-h-[520px] flex-1 mt-4' : 'min-h-full flex-1'}`}>
         <BackgroundCarousel images={homeContent.carousel_images} />
         <div className="absolute inset-0 cad-ambient-grid opacity-20 pointer-events-none" />
 
-        <div className="relative z-10 p-4 sm:p-6 min-h-[520px] grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-4">
+        <div className={`relative z-10 p-4 sm:p-6 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-4 ${rulesOutdated ? 'min-h-[520px]' : 'min-h-full'}`}>
           <div className="flex flex-col justify-between gap-4">
             <div className="max-w-3xl">
               {cmsError ? (

@@ -50,7 +50,7 @@ export default function MainLayout() {
   const location = useLocation();
   const { activeDepartment } = useDepartment();
   const isAdminRoute = location.pathname.startsWith('/admin');
-  const isHomeRoute = location.pathname === '/home';
+  const isHomeRoute = location.pathname === '/home' || location.pathname.startsWith('/home/');
   const hideSidebar = ['/settings', '/home', '/departments', '/rules'].includes(location.pathname) || isAdminRoute;
   const hasDepartmentTheme = !!(activeDepartment && !hideSidebar);
   const departmentColor = String(activeDepartment?.color || '#0052C2').trim() || '#0052C2';
