@@ -890,11 +890,15 @@ function formatPrintedDocReference(metadata) {
   var parts = [];
   var recordId = Number(safeGet(metadata, "record_id", 0));
   var warningId = Number(safeGet(metadata, "warning_id", 0));
+  var infringementNoticeId = Number(safeGet(metadata, "infringement_notice_id", 0));
   var printJobId = Number(safeGet(metadata, "cad_print_job_id", 0));
+  var noticeNumber = printedDocString(safeGet(metadata, "notice_number", ""));
   var citizenId = printedDocString(safeGet(metadata, "citizen_id", ""));
   var subjectKey = printedDocString(safeGet(metadata, "subject_key", ""));
   if (Number.isInteger(recordId) && recordId > 0) parts.push("Record #" + String(recordId));
   if (Number.isInteger(warningId) && warningId > 0) parts.push("Warning #" + String(warningId));
+  if (noticeNumber) parts.push("Notice " + noticeNumber);
+  if (Number.isInteger(infringementNoticeId) && infringementNoticeId > 0) parts.push("Infringement #" + String(infringementNoticeId));
   if (Number.isInteger(printJobId) && printJobId > 0) parts.push("Print Job #" + String(printJobId));
   if (citizenId) parts.push("CID " + citizenId);
   if (subjectKey) parts.push("Ref " + subjectKey);
@@ -1030,8 +1034,16 @@ function resetPrintedDocForm(payload) {
     formatPrintedDocDate(printedDocFirstNonEmpty([safeGet(metadata, "issued_at", ""), safeGet(metadata, "printed_at", "")], "")),
     "Unknown"
   );
-  setPrintedDocField(printedDocStatus, printedDocToTitleCase(safeGet(metadata, "status", "")), "N/A");
-  setPrintedDocField(printedDocFine, formatPrintedDocMoney(safeGet(metadata, "fine_amount", 0)), "N/A");
+  setPrintedDocField(
+    printedDocStatus,
+    printedDocToTitleCase(printedDocFirstNonEmpty([safeGet(metadata, "status", ""), safeGet(metadata, "payable_status", "")], "")),
+    "N/A"
+  );
+  setPrintedDocField(
+    printedDocFine,
+    formatPrintedDocMoney(printedDocFirstNonEmpty([safeGet(metadata, "fine_amount", 0), safeGet(metadata, "amount", 0)], 0)),
+    "N/A"
+  );
   setPrintedDocField(printedDocJail, formatPrintedDocJail(safeGet(metadata, "jail_minutes", 0)), "N/A");
   setPrintedDocField(printedDocReference, formatPrintedDocReference(metadata), "N/A");
 

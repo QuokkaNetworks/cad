@@ -351,6 +351,31 @@ RegisterNetEvent('cad_bridge:showPrintedDocument', function(payload)
 end)
 
 local function extractOxPrintedDocumentMetadata(eventName, item, inventory, slot, data)
+  -- ox_inventory client.export callbacks pass (data, slot) in modern builds.
+  -- Support that first, while still keeping compatibility with older event-style signatures.
+  if type(eventName) == 'table' and type(item) ~= 'string' then
+    local first = eventName
+    local meta = nil
+    if type(first.metadata) == 'table' then meta = first.metadata end
+    if type(first.info) == 'table' and type(meta) ~= 'table' then meta = first.info end
+
+    if type(meta) ~= 'table' then
+      local hasLikelyDocFields = first.document_type ~= nil or first.document_subtype ~= nil or first.title ~= nil or first.description ~= nil
+      if hasLikelyDocFields then
+        meta = first
+      end
+    end
+
+    if type(meta) == 'table' then
+      return {
+        item_name = trim(first.name or first.item or ''),
+        item_label = trim(first.label or ''),
+        metadata = meta,
+        source = 'ox_inventory:client.export',
+      }
+    end
+  end
+
   local meta = nil
   local itemName = ''
   local itemLabel = ''
@@ -416,7 +441,7 @@ local function shouldSuppressPrintedDocOpen(payload)
 end
 
 local function handleOxPrintedDocumentUseExport(eventName, item, inventory, slot, data)
-  local normalizedEvent = trim(eventName or ''):lower()
+  local normalizedEvent = type(eventName) == 'string' and trim(eventName):lower() or ''
   if normalizedEvent == 'buying' then
     return true
   end
