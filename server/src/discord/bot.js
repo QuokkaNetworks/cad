@@ -64,6 +64,10 @@ function isGameToDiscordJobSyncEnabled() {
   return toBool(Settings.get('fivem_bridge_job_sync_reverse_enabled'), true);
 }
 
+function isCharacterNameNicknameSyncEnabled() {
+  return toBool(Settings.get('qbox_discord_sync_character_name_enabled'), false);
+}
+
 function getQboxJobSourceFallbackPolicy() {
   const playersTable = String(Settings.get('qbox_players_table') || 'players').trim().toLowerCase();
   const jobTable = String(Settings.get('qbox_job_table') || Settings.get('qbox_players_table') || 'players').trim().toLowerCase();
@@ -481,6 +485,7 @@ async function syncJobRolesFromGame(user, member, mappings) {
 
 async function syncLinkedUserAccess(user, member, mappings) {
   const reverseJobSync = await syncJobRolesFromGame(user, member, mappings);
+  const nicknameSync = await syncCharacterNameNickname(user, member);
   const memberRoleIds = new Set(member.roles.cache.map(r => r.id));
   const hasAdminRole = memberRoleIds.has(ADMIN_DISCORD_ROLE_ID);
   const { departmentIds, subDepartmentIds, roleJobs } = getMappedTargets(memberRoleIds, mappings);
@@ -538,8 +543,94 @@ async function syncLinkedUserAccess(user, member, mappings) {
     departments: newDepts,
     sub_departments: newSubDepts,
     reverse_job_role_sync: reverseJobSync,
+    nickname_sync: nicknameSync,
     queued_job_sync_id: queuedJob?.id || null,
   };
+}
+
+function formatCharacterFullName(character) {
+  const first = String(character?.firstname || '').trim();
+  const last = String(character?.lastname || '').trim();
+  const fullName = `${first} ${last}`.trim().replace(/\s+/g, ' ');
+  if (!fullName) return '';
+  return fullName.slice(0, 32);
+}
+
+async function syncCharacterNameNickname(user, member) {
+  if (!isCharacterNameNicknameSyncEnabled()) {
+    return { enabled: false, changed: false, reason: 'disabled' };
+  }
+
+  const citizenIdCandidates = getUserCitizenIdCandidates(user)
+    .map((row) => String(row?.citizen_id || '').trim())
+    .filter(Boolean);
+  if (citizenIdCandidates.length === 0) {
+    return { enabled: true, changed: false, reason: 'no_linked_citizen_ids' };
+  }
+
+  let resolvedCharacter = null;
+  for (const citizenId of citizenIdCandidates) {
+    try {
+      const character = await qbox.getCharacterById(citizenId);
+      const fullName = formatCharacterFullName(character);
+      if (!fullName) continue;
+      resolvedCharacter = {
+        citizenId,
+        fullName,
+      };
+      break;
+    } catch (err) {
+      const msg = String(err?.message || err || 'Unknown QBX lookup error');
+      console.warn(`[Discord] Character name lookup failed for user ${user.id} (${citizenId}): ${msg}`);
+    }
+  }
+
+  if (!resolvedCharacter) {
+    return {
+      enabled: true,
+      changed: false,
+      reason: 'no_character_name',
+      lookup_citizen_ids: citizenIdCandidates,
+    };
+  }
+
+  const currentNickname = String(member.nickname || '').trim();
+  if (currentNickname === resolvedCharacter.fullName) {
+    return {
+      enabled: true,
+      changed: false,
+      reason: 'already_synced',
+      citizen_id: resolvedCharacter.citizenId,
+      nickname: resolvedCharacter.fullName,
+    };
+  }
+
+  try {
+    await member.setNickname(resolvedCharacter.fullName, 'CAD QBox character name sync');
+    audit(user.id, 'discord_nickname_sync_from_qbox', {
+      discordId: user.discord_id,
+      citizen_id: resolvedCharacter.citizenId,
+      before: currentNickname,
+      after: resolvedCharacter.fullName,
+    });
+    return {
+      enabled: true,
+      changed: true,
+      reason: 'synced',
+      citizen_id: resolvedCharacter.citizenId,
+      nickname: resolvedCharacter.fullName,
+    };
+  } catch (err) {
+    const msg = String(err?.message || err || 'Unknown Discord nickname sync error');
+    return {
+      enabled: true,
+      changed: false,
+      reason: 'update_failed',
+      citizen_id: resolvedCharacter.citizenId,
+      nickname: resolvedCharacter.fullName,
+      error: msg,
+    };
+  }
 }
 
 async function startBot() {
@@ -664,6 +755,7 @@ async function syncUserRoles(discordId) {
     departments: synced.departments.map(d => d.short_name),
     sub_departments: synced.sub_departments.map(d => d.short_name),
     reverse_job_role_sync: synced.reverse_job_role_sync,
+    nickname_sync: synced.nickname_sync,
     queued_job_sync_id: synced.queued_job_sync_id,
   };
 }

@@ -17,6 +17,7 @@ const QBOX_SETTING_KEYS = [
   'qbox_charinfo_col',
   'qbox_money_col',
   'qbox_job_col',
+  'qbox_discord_sync_character_name_enabled',
 ];
 
 function formatErr(err) {
@@ -62,7 +63,11 @@ export default function AdminQboxSettings() {
   function buildPayload() {
     const payload = {};
     for (const key of QBOX_SETTING_KEYS) {
-      payload[key] = String(settings?.[key] ?? '');
+      if (key === 'qbox_discord_sync_character_name_enabled') {
+        payload[key] = settings?.[key] === 'true' ? 'true' : 'false';
+      } else {
+        payload[key] = String(settings?.[key] ?? '');
+      }
     }
     return payload;
   }
@@ -193,6 +198,20 @@ export default function AdminQboxSettings() {
 
         <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider mt-5 mb-3">Default Table Bindings</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="md:col-span-2">
+            <label className="flex items-center gap-2 text-xs text-cad-muted">
+              <input
+                type="checkbox"
+                checked={settings.qbox_discord_sync_character_name_enabled === 'true'}
+                onChange={(e) => updateSetting('qbox_discord_sync_character_name_enabled', e.target.checked ? 'true' : 'false')}
+                className="h-4 w-4 rounded border-cad-border bg-cad-surface text-cad-accent focus:ring-cad-accent"
+              />
+              Sync Discord nickname to QBox character name
+            </label>
+            <p className="text-[11px] text-cad-muted mt-1">
+              When enabled, Discord role sync will set each linked member nickname to <span className="font-mono">Firstname Lastname</span> from the configured players <span className="font-mono">charinfo</span> field.
+            </p>
+          </div>
           <div>
             <label className="block text-xs text-cad-muted mb-1">Players Table</label>
             <input
