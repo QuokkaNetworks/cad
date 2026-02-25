@@ -523,7 +523,7 @@ export default function Infringements() {
   const departmentId = Number(activeDepartment?.id || 0) || null;
   const isLaw = getDepartmentLayoutType(activeDepartment) === DEPARTMENT_LAYOUT.LAW_ENFORCEMENT;
 
-  const [filters, setFilters] = useState({ status: 'open', payable_status: 'all', q: '', court_only: false });
+  const [filters, setFilters] = useState({ status: 'open', payable_status: 'unpaid', q: '', court_only: false });
   const [list, setList] = useState([]);
   const [courtList, setCourtList] = useState([]);
   const [loading, setLoading] = useState(false);

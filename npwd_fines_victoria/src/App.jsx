@@ -2,6 +2,26 @@ import React, { useEffect, useState } from 'react';
 import logo from './assets/FinesVicLogo.jpg';
 import { fetchCadBridgeNui } from './utils/fetchNui.js';
 
+const EARLY_DIALOG_BLOCK_KEY = '__quokkaFinesVicDialogBlockInstalled';
+
+function installEarlyNativeDialogBlock() {
+  if (typeof window === 'undefined') return;
+  if (window[EARLY_DIALOG_BLOCK_KEY]) return;
+  window[EARLY_DIALOG_BLOCK_KEY] = true;
+
+  // Block native JS dialogs early so they cannot appear behind the game before
+  // the React app mounts and installs the richer in-app status messaging.
+  try {
+    window.alert = () => {};
+    window.confirm = () => false;
+    window.prompt = () => null;
+  } catch {
+    // no-op
+  }
+}
+
+installEarlyNativeDialogBlock();
+
 function formatCurrency(value) {
   const amount = Number(value || 0);
   if (!Number.isFinite(amount)) return '$0';

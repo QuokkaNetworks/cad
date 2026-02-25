@@ -1,4 +1,4 @@
-import { j as o, l as i, A as a, __tla as __tla_0 } from "./App-DcmF18PS.js";
+import { j as o, l as i, A as a, __tla as __tla_0 } from "./App-BCybjJIx.js";
 import { importShared as t, __tla as __tla_1 } from "./__federation_fn_import-C_7gNWqI.js";
 let p, r;
 let __tla = Promise.all([

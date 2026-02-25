@@ -552,6 +552,8 @@ select {
 .printed-doc-popup {
   width: min(740px, 92vw);
   height: min(82vh, 760px);
+  max-width: calc(100vw - 1rem);
+  max-height: calc(100vh - 1rem);
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 0.55rem;
@@ -564,7 +566,12 @@ select {
     0 18px 42px rgba(0, 0, 0, 0.56),
     0 0 0 1px rgba(0, 82, 194, 0.08) inset;
   padding: 0.75rem;
+  overflow: hidden;
   animation: panel-enter 150ms ease-out;
+}
+
+.printed-doc-popup > * {
+  min-width: 0;
 }
 
 .printed-doc-overlay--ticket {
@@ -575,6 +582,8 @@ select {
 .printed-doc-overlay--ticket .printed-doc-popup {
   width: min(560px, 80vw);
   height: min(72vh, 640px);
+  max-width: calc(100vw - 1rem);
+  max-height: calc(100vh - 1rem);
   border-radius: 12px;
   border: 1px solid rgba(120, 109, 87, 0.7);
   background:
@@ -753,6 +762,8 @@ select {
 
 .printed-doc-pdf-viewport {
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   overflow: auto;
   border-radius: 12px;
   border: 1px solid rgba(49, 71, 98, 0.9);
@@ -760,6 +771,12 @@ select {
     radial-gradient(circle at 20% 10%, rgba(56, 89, 133, 0.15), transparent 45%),
     rgba(10, 15, 23, 0.88);
   padding: 0.75rem;
+  overscroll-behavior: contain;
+  cursor: grab;
+}
+
+.printed-doc-pdf-viewport.is-dragging {
+  cursor: grabbing;
 }
 
 .printed-doc-pdf-pages {
@@ -767,6 +784,9 @@ select {
   justify-items: center;
   gap: 0.85rem;
   min-height: 100%;
+  min-width: 100%;
+  width: max-content;
+  margin-inline: auto;
   align-content: start;
 }
 

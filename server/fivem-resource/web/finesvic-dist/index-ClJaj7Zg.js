@@ -34,7 +34,7 @@
       return r().catch(f);
     });
   };
-  y(() => import("./index-BoA1xvaK.js").then(async (m) => {
+  y(() => import("./index-BBs2IRK9.js").then(async (m) => {
     await m.__tla;
     return m;
   }), [], import.meta.url);

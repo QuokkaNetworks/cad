@@ -156,6 +156,7 @@ var printedDocPdfZoom = 1;
 var printedDocPdfFitZoom = 1;
 var printedDocPdfHasPdf = false;
 var printedDocStatusAutoHideTimer = 0;
+var printedDocPdfDragState = null;
 
 function bindIdCardNodes() {
   idCardOverlay = document.getElementById("idCardOverlay");
@@ -1225,6 +1226,7 @@ function resetPrintedDocPdfViewer() {
   printedDocPdfDoc = null;
   printedDocPdfZoom = 1;
   printedDocPdfFitZoom = 1;
+  clearPrintedDocPdfDragState();
   clearPrintedDocPdfPages();
   clearPrintedDocStatusAutoHide();
   setPrintedDocPdfStatus("", false);
@@ -1367,6 +1369,40 @@ function fitPrintedDocPdfToWidth() {
   if (!printedDocPdfDoc || !printedDocPdfHasPdf) return;
   printedDocPdfZoom = clampPrintedDocZoom(printedDocPdfFitZoom || 1);
   renderPrintedDocPdfPages();
+}
+
+function clearPrintedDocPdfDragState() {
+  printedDocPdfDragState = null;
+  if (printedDocPdfViewport && printedDocPdfViewport.classList) {
+    printedDocPdfViewport.classList.remove("is-dragging");
+  }
+}
+
+function beginPrintedDocPdfDrag(event) {
+  if (!printedDocPdfViewport || !printedDocPdfHasPdf || !printedDocPdfDoc) return;
+  if (!event || event.button !== 0) return;
+  printedDocPdfDragState = {
+    startX: Number(event.clientX || 0),
+    startY: Number(event.clientY || 0),
+    scrollLeft: Number(printedDocPdfViewport.scrollLeft || 0),
+    scrollTop: Number(printedDocPdfViewport.scrollTop || 0)
+  };
+  if (printedDocPdfViewport.classList) printedDocPdfViewport.classList.add("is-dragging");
+  event.preventDefault();
+}
+
+function movePrintedDocPdfDrag(event) {
+  if (!printedDocPdfDragState || !printedDocPdfViewport) return;
+  var buttons = Number(event && event.buttons);
+  if (Number.isFinite(buttons) && buttons > 0 && (buttons & 1) !== 1) {
+    clearPrintedDocPdfDragState();
+    return;
+  }
+  var deltaX = Number(event.clientX || 0) - printedDocPdfDragState.startX;
+  var deltaY = Number(event.clientY || 0) - printedDocPdfDragState.startY;
+  printedDocPdfViewport.scrollLeft = printedDocPdfDragState.scrollLeft - deltaX;
+  printedDocPdfViewport.scrollTop = printedDocPdfDragState.scrollTop - deltaY;
+  event.preventDefault();
 }
 
 function setPrintedDocField(node, value, fallback) {
@@ -2864,6 +2900,9 @@ function initialize() {
     copyPrintedDocShareText();
   });
   if (printedDocPdfViewport) {
+    printedDocPdfViewport.addEventListener("mousedown", function onPrintedDocDragStart(event) {
+      beginPrintedDocPdfDrag(event);
+    });
     printedDocPdfViewport.addEventListener("wheel", function onPrintedDocWheel(event) {
       if (!printedDocPdfHasPdf || !printedDocPdfDoc) return;
       if (!event.ctrlKey) return;
@@ -2871,6 +2910,12 @@ function initialize() {
       changePrintedDocZoom(event.deltaY < 0 ? 0.1 : -0.1);
     }, { passive: false });
   }
+  document.addEventListener("mousemove", function onPrintedDocDragMove(event) {
+    movePrintedDocPdfDrag(event);
+  });
+  document.addEventListener("mouseup", function onPrintedDocDragEnd() {
+    clearPrintedDocPdfDragState();
+  });
 
   if (licenseForm) {
     licenseForm.addEventListener("submit", function onLicenseSubmit(event) {
