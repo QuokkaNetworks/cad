@@ -29,9 +29,13 @@ const MAP_WORLD_IMAGE_RECT_NORMALIZED = {
   height: 0.892903645833333,
 };
 const MAP_SUBGRID_WORLD_STEP = 1500;
-const MAP_MIN_ZOOM = 1;
-const MAP_MAX_ZOOM = 6;
-const MAP_BUTTON_ZOOM_STEP = 0.25;
+const MAP_WHOLE_IMAGE_ZOOM = 1;
+const MAP_ATLAS_FIT_ZOOM = Number((1 / MAP_WORLD_IMAGE_RECT_NORMALIZED.width).toFixed(2));
+const MAP_DEFAULT_ZOOM = MAP_ATLAS_FIT_ZOOM;
+const MAP_MIN_ZOOM = MAP_WHOLE_IMAGE_ZOOM;
+const MAP_MAX_ZOOM = 12;
+const MAP_BUTTON_ZOOM_STEP = 0.2;
+const MAP_KEYBOARD_PAN_STEP = 80;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -362,7 +366,7 @@ export default function DispatchMap() {
   const dragStateRef = useRef(null);
   const suppressMarkerClickUntilRef = useRef(0);
   const [mapViewportSize, setMapViewportSize] = useState({ width: 0, height: 0 });
-  const [mapView, setMapView] = useState({ scale: 1, x: 0, y: 0 });
+  const [mapView, setMapView] = useState({ scale: MAP_DEFAULT_ZOOM, x: 0, y: 0 });
   const [isMapDragging, setIsMapDragging] = useState(false);
   const [cursorWorld, setCursorWorld] = useState(null);
   const [layerVisibility, setLayerVisibility] = useState({
@@ -375,7 +379,8 @@ export default function DispatchMap() {
   });
   const mapZoom = mapView.scale;
   const atlasCoveragePct = Math.round(MAP_WORLD_IMAGE_RECT_NORMALIZED.width * 1000) / 10;
-  const atlasFitZoomPct = Math.round((1 / MAP_WORLD_IMAGE_RECT_NORMALIZED.width) * 100);
+  const atlasFitZoomPct = Math.round(MAP_DEFAULT_ZOOM * 100);
+  const wholeImageZoomPct = Math.round(MAP_WHOLE_IMAGE_ZOOM * 100);
 
   const loadMapData = useCallback(async () => {
     if (!departmentId) return;
@@ -693,8 +698,33 @@ export default function DispatchMap() {
     updateMapView(mapZoom - MAP_BUTTON_ZOOM_STEP);
   }
 
+  function setMapZoomFromSlider(nextZoom) {
+    updateMapView(Number(nextZoom));
+  }
+
+  function fitAtlasMapView() {
+    updateMapView(MAP_DEFAULT_ZOOM);
+  }
+
+  function showWholeImageView() {
+    updateMapView(MAP_WHOLE_IMAGE_ZOOM);
+  }
+
   function resetMapView() {
-    updateMapView(MAP_MIN_ZOOM);
+    fitAtlasMapView();
+  }
+
+  function nudgeMapBy(dx = 0, dy = 0) {
+    setMapView((prev) => {
+      const clamped = clampPanToViewport(
+        mapViewportSize,
+        prev.scale,
+        prev.x + (Number(dx) || 0),
+        prev.y + (Number(dy) || 0),
+      );
+      if (clamped.x === prev.x && clamped.y === prev.y) return prev;
+      return { ...prev, ...clamped };
+    });
   }
 
   function centerMapOnMarker(marker, targetScale = null) {
@@ -718,15 +748,25 @@ export default function DispatchMap() {
     event.stopPropagation();
     const point = getViewportRelativePoint(event);
     if (!point) return;
+    if (event.shiftKey) {
+      const panMultiplier = event.ctrlKey ? 2.4 : 1.35;
+      const delta = Number(event.deltaY || 0);
+      nudgeMapBy(0, -round2(delta * panMultiplier));
+      return;
+    }
     const wheelDelta = Math.sign(event.deltaY);
     const directionFactor = wheelDelta === 0 ? 0 : -wheelDelta;
-    const smoothFactor = 1 + (Math.min(1, Math.abs(event.deltaY) / 240) * 0.18 * directionFactor);
+    const zoomSpeed = event.ctrlKey ? 0.28 : 0.2;
+    const smoothFactor = 1 + (Math.min(1, Math.abs(event.deltaY) / 240) * zoomSpeed * directionFactor);
     const next = clamp(mapZoom * (smoothFactor || 1), MAP_MIN_ZOOM, MAP_MAX_ZOOM);
     updateMapView(next, point);
   }
 
   function handleMapPointerDown(event) {
-    if (event.button !== 0) return;
+    if (event.button !== 0 && event.button !== 1 && event.button !== 2) return;
+    if (event.button === 2) {
+      event.preventDefault();
+    }
     const point = getViewportRelativePoint(event);
     if (!point) return;
     dragStateRef.current = {
@@ -740,6 +780,54 @@ export default function DispatchMap() {
     setIsMapDragging(true);
     if (typeof event.currentTarget.setPointerCapture === 'function') {
       event.currentTarget.setPointerCapture(event.pointerId);
+    }
+  }
+
+  function handleMapDoubleClick(event) {
+    if (event.cancelable) event.preventDefault();
+    event.stopPropagation();
+    const point = getViewportRelativePoint(event);
+    if (!point) return;
+    updateMapView(mapZoom + Math.max(MAP_BUTTON_ZOOM_STEP, 0.35), point);
+  }
+
+  function handleMapKeyDown(event) {
+    if (!event) return;
+    if (event.key === '+' || event.key === '=') {
+      event.preventDefault();
+      zoomIn();
+      return;
+    }
+    if (event.key === '-' || event.key === '_') {
+      event.preventDefault();
+      zoomOut();
+      return;
+    }
+    if (event.key === '0') {
+      event.preventDefault();
+      fitAtlasMapView();
+      return;
+    }
+    if (event.key === '1') {
+      event.preventDefault();
+      showWholeImageView();
+      return;
+    }
+
+    const fast = event.shiftKey ? 2.2 : 1;
+    const step = Math.round(MAP_KEYBOARD_PAN_STEP * fast);
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      nudgeMapBy(0, step);
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      nudgeMapBy(0, -step);
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      nudgeMapBy(step, 0);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      nudgeMapBy(-step, 0);
     }
   }
 
@@ -915,18 +1003,37 @@ export default function DispatchMap() {
                 <span className="inline-flex items-center rounded-md border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-cad-muted">
                   Atlas-fit zoom {atlasFitZoomPct}%
                 </span>
+                <span className="inline-flex items-center rounded-md border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-cad-muted">
+                  Whole image {wholeImageZoomPct}%
+                </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 justify-end">
                 <button type="button" onClick={zoomOut} disabled={mapZoom <= MAP_MIN_ZOOM} className="px-2.5 py-1 rounded-md border border-cad-border bg-cad-surface text-xs disabled:opacity-40">-</button>
                 <div className="min-w-[60px] text-center text-xs text-cad-muted">{Math.round(mapZoom * 100)}%</div>
                 <button type="button" onClick={zoomIn} disabled={mapZoom >= MAP_MAX_ZOOM} className="px-2.5 py-1 rounded-md border border-cad-border bg-cad-surface text-xs disabled:opacity-40">+</button>
+                <input
+                  type="range"
+                  min={MAP_MIN_ZOOM}
+                  max={MAP_MAX_ZOOM}
+                  step="0.01"
+                  value={mapZoom}
+                  onChange={(e) => setMapZoomFromSlider(e.target.value)}
+                  className="w-28 accent-blue-400"
+                  aria-label="Map zoom"
+                />
                 <button
                   type="button"
-                  onClick={resetMapView}
-                  disabled={mapZoom === MAP_MIN_ZOOM && mapView.x === 0 && mapView.y === 0}
+                  onClick={fitAtlasMapView}
                   className="px-2.5 py-1 rounded-md border border-cad-border bg-cad-surface text-xs disabled:opacity-40"
                 >
-                  Reset
+                  Fit Atlas
+                </button>
+                <button
+                  type="button"
+                  onClick={showWholeImageView}
+                  className="px-2.5 py-1 rounded-md border border-cad-border bg-cad-surface text-xs disabled:opacity-40"
+                >
+                  Whole Map
                 </button>
                 <button
                   type="button"
@@ -936,12 +1043,21 @@ export default function DispatchMap() {
                 >
                   Center Selected
                 </button>
+                <div className="inline-flex items-center rounded-md border border-cad-border bg-cad-surface overflow-hidden">
+                  <button type="button" onClick={() => nudgeMapBy(0, MAP_KEYBOARD_PAN_STEP)} className="px-2 py-1 text-xs text-cad-muted hover:text-cad-ink" aria-label="Pan up">↑</button>
+                  <button type="button" onClick={() => nudgeMapBy(MAP_KEYBOARD_PAN_STEP, 0)} className="px-2 py-1 text-xs text-cad-muted hover:text-cad-ink border-l border-cad-border" aria-label="Pan left">←</button>
+                  <button type="button" onClick={() => nudgeMapBy(-MAP_KEYBOARD_PAN_STEP, 0)} className="px-2 py-1 text-xs text-cad-muted hover:text-cad-ink border-l border-cad-border" aria-label="Pan right">→</button>
+                  <button type="button" onClick={() => nudgeMapBy(0, -MAP_KEYBOARD_PAN_STEP)} className="px-2 py-1 text-xs text-cad-muted hover:text-cad-ink border-l border-cad-border" aria-label="Pan down">↓</button>
+                </div>
               </div>
             </div>
             <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
-              <span className="text-cad-muted">Drag to pan. Mouse wheel zooms. Cursor coordinates only report inside the calibrated map atlas.</span>
+              <span className="text-cad-muted">Drag (left or right mouse) to pan. Mouse wheel zooms. Double-click zooms in. Hold `Shift` while wheeling to pan. Cursor coordinates only report inside the calibrated map atlas.</span>
               <span className="inline-flex items-center rounded border border-cad-border bg-cad-surface/70 px-2 py-0.5 text-cad-muted">
                 Grid aligns to GTA pause-map tile boundaries
+              </span>
+              <span className="inline-flex items-center rounded border border-cad-border bg-cad-surface/70 px-2 py-0.5 text-cad-muted">
+                Keyboard: arrows pan, `+/-` zoom, `0` fit, `1` whole map
               </span>
             </div>
 
@@ -967,7 +1083,13 @@ export default function DispatchMap() {
                   touchAction: 'none',
                   overscrollBehavior: 'contain',
                 }}
+                tabIndex={0}
+                role="application"
+                aria-label="Dispatch AVL map"
                 onWheelCapture={handleMapWheel}
+                onDoubleClick={handleMapDoubleClick}
+                onContextMenu={(e) => e.preventDefault()}
+                onKeyDown={handleMapKeyDown}
                 onPointerDown={handleMapPointerDown}
                 onPointerMove={handleMapPointerMove}
                 onPointerUp={endMapPointerInteraction}
