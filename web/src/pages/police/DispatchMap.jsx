@@ -24,6 +24,23 @@ const MAP_WHOLE_PADDING_PX = [8, 8];
 const LEAFLET_DEFAULT_MIN_ZOOM = -2;
 const LEAFLET_MAX_ZOOM = 4.5;
 
+// Affine calibration maps the current/raw world solution (derived from the atlas rect)
+// to observed GTA world coordinates using landmark samples (MRPD, Pillbox, Sandy SO).
+// raw -> calibrated(actual)
+const WORLD_CAL_A = 0.6667353755004273;
+const WORLD_CAL_B = 0.06542524236688713;
+const WORLD_CAL_C = -0.4296981536163556;
+const WORLD_CAL_D = 1.0218909679548032;
+const WORLD_CAL_TX = 470.0854845253253;
+const WORLD_CAL_TY = -5.2163964132441265;
+// calibrated(actual) -> raw (inverse matrix), used before plotting unit/call markers
+const WORLD_CAL_INV_A = 1.4404111102320463;
+const WORLD_CAL_INV_B = -0.09222045105604326;
+const WORLD_CAL_INV_C = 0.6056830072135153;
+const WORLD_CAL_INV_D = 0.9397999126830787;
+const WORLD_CAL_INV_TX = -677.5974130992097;
+const WORLD_CAL_INV_TY = -279.8204210210343;
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -89,7 +106,27 @@ function isImagePointInsideAtlas(point) {
     && y <= (MAP_ATLAS_RECT.y + MAP_ATLAS_RECT.height);
 }
 
-function worldToImagePoint(x, y) {
+function applyWorldCalibration(point) {
+  const x = Number(point?.x);
+  const y = Number(point?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return { x: 0, y: 0 };
+  return {
+    x: (WORLD_CAL_A * x) + (WORLD_CAL_B * y) + WORLD_CAL_TX,
+    y: (WORLD_CAL_C * x) + (WORLD_CAL_D * y) + WORLD_CAL_TY,
+  };
+}
+
+function invertWorldCalibration(point) {
+  const x = Number(point?.x);
+  const y = Number(point?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return { x: 0, y: 0 };
+  return {
+    x: (WORLD_CAL_INV_A * x) + (WORLD_CAL_INV_B * y) + WORLD_CAL_INV_TX,
+    y: (WORLD_CAL_INV_C * x) + (WORLD_CAL_INV_D * y) + WORLD_CAL_INV_TY,
+  };
+}
+
+function rawWorldToImagePoint(x, y) {
   const relX = (Number(x) - WORLD_BOUNDS.minX) / (WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX);
   const relY = (Number(y) - WORLD_BOUNDS.minY) / (WORLD_BOUNDS.maxY - WORLD_BOUNDS.minY);
   return {
@@ -98,13 +135,23 @@ function worldToImagePoint(x, y) {
   };
 }
 
-function imageToWorldPoint(x, y) {
+function rawImageToWorldPoint(x, y) {
   const relX = (Number(x) - MAP_ATLAS_RECT.x) / MAP_ATLAS_RECT.width;
   const relY = (Number(y) - MAP_ATLAS_RECT.y) / MAP_ATLAS_RECT.height;
   return {
     x: WORLD_BOUNDS.minX + (relX * (WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX)),
     y: WORLD_BOUNDS.minY + ((1 - relY) * (WORLD_BOUNDS.maxY - WORLD_BOUNDS.minY)),
   };
+}
+
+function worldToImagePoint(x, y) {
+  const raw = invertWorldCalibration({ x, y });
+  return rawWorldToImagePoint(raw.x, raw.y);
+}
+
+function imageToWorldPoint(x, y) {
+  const raw = rawImageToWorldPoint(x, y);
+  return applyWorldCalibration(raw);
 }
 
 function imagePointToLatLng(point) {
