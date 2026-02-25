@@ -31,6 +31,7 @@ if (trafficYieldClearDrivingStyle % (trafficYieldStopAtLightsFlag * 2)) >= traff
   -- Remove the stop-at-lights bit while clearing space for emergency vehicles.
   trafficYieldClearDrivingStyle = trafficYieldClearDrivingStyle - trafficYieldStopAtLightsFlag
 end
+local trafficYieldImmediateDriveStyle = trafficYieldClearDrivingStyle
 
 local trafficYieldPollIntervalMs = math.max(100, math.floor(tonumber(Config.AiTrafficYieldAssistPollIntervalMs) or 250))
 local trafficYieldRadiusMeters = math.max(20.0, tonumber(Config.AiTrafficYieldAssistRadiusMeters) or 70.0)
@@ -170,7 +171,11 @@ local function applyTrafficYieldAssist(target, officerVehicleSpeedMps, nowMs)
     extraForward = extraForward + 14.0
   end
   local sideOffsetMeters = math.max(trafficYieldSideOffsetMeters * 2.0, trafficYieldSideOffsetMeters + 4.0)
-  sideOffsetMeters = math.min(math.max(sideOffsetMeters, math.abs(lateralDistance) + 4.0), trafficYieldLaneBandMeters + 6.0)
+  sideOffsetMeters = math.max(sideOffsetMeters, math.abs(lateralDistance) + 5.5)
+  if isStoppedOrQueued then
+    sideOffsetMeters = sideOffsetMeters + 6.0
+  end
+  sideOffsetMeters = math.min(sideOffsetMeters, trafficYieldLaneBandMeters + 14.0)
   local destX = (tonumber(currentCoords.x) or 0.0)
     + ((tonumber(forwardVec.x) or 0.0) * (trafficYieldForwardOffsetMeters + extraForward))
     + ((tonumber(rightVec.x) or 0.0) * (sideOffsetMeters * sideSign))
@@ -187,8 +192,23 @@ local function applyTrafficYieldAssist(target, officerVehicleSpeedMps, nowMs)
 
   pcall(function()
     SetDriveTaskDrivingStyle(driver, trafficYieldClearDrivingStyle)
+    SetDriverAbility(driver, 1.0)
+    SetDriverAggressiveness(driver, 1.0)
     SetPedKeepTask(driver, true)
-    TaskVehicleDriveToCoordLongrange(driver, vehicle, destX + 0.0, destY + 0.0, destZ + 0.0, driveSpeedMps + 0.0, trafficYieldClearDrivingStyle, 1.5)
+    -- Short-range drive task reacts immediately and is more willing to cross lane lines to reach the offset target.
+    TaskVehicleDriveToCoord(
+      driver,
+      vehicle,
+      destX + 0.0,
+      destY + 0.0,
+      destZ + 0.0,
+      driveSpeedMps + 0.0,
+      0,
+      GetEntityModel(vehicle),
+      trafficYieldImmediateDriveStyle,
+      1.0,
+      1.0
+    )
   end)
 
   if trafficYieldPushMinSpeedMps > 0.0 then
@@ -205,11 +225,14 @@ local function applyTrafficYieldAssist(target, officerVehicleSpeedMps, nowMs)
 
   trafficYieldAssistStates[vehicle] = {
     driver = driver,
-    revert_at_ms = nowMs + trafficYieldResumeAfterMs,
+    revert_at_ms = nowMs + math.max(trafficYieldResumeAfterMs, isStoppedOrQueued and 10000 or trafficYieldResumeAfterMs),
     cooldown_until_ms = nowMs + trafficYieldCooldownMs,
-    next_reapply_ms = nowMs + trafficYieldReapplyMs,
+    next_reapply_ms = nowMs + math.max(250, math.min(trafficYieldReapplyMs, 450)),
     resumed = false,
     resume_speed_mps = math.max(8.0, math.min(20.0, driveSpeedMps)),
+    yield_side_sign = sideSign,
+    yield_side_offset_m = sideOffsetMeters,
+    yield_drive_speed_mps = driveSpeedMps,
   }
 end
 
@@ -227,6 +250,87 @@ local function tickTrafficYieldRestore(nowMs)
       if type(entry) ~= 'table' then
         trafficYieldAssistStates[vehicle] = nil
       else
+        if entry.resumed ~= true and nowMs < (tonumber(entry.revert_at_ms) or 0)
+          and nowMs >= (tonumber(entry.next_reapply_ms) or 0)
+        then
+          local driver = entry.driver
+          if driver and driver ~= 0 and DoesEntityExist(driver)
+            and GetPedInVehicleSeat(vehicle, -1) == driver and not IsPedAPlayer(driver)
+          then
+            local currentSpeedMps = tonumber(GetEntitySpeed(vehicle)) or 0.0
+            local sustainSpeedMps = math.max(
+              12.0,
+              math.min(
+                30.0,
+                math.max(
+                  tonumber(entry.yield_drive_speed_mps) or tonumber(entry.resume_speed_mps) or 12.0,
+                  currentSpeedMps + 4.0
+                )
+              )
+            )
+            local sideSign = (tonumber(entry.yield_side_sign) or 1.0) >= 0.0 and 1.0 or -1.0
+            local sideOffsetMeters = math.max(
+              tonumber(entry.yield_side_offset_m) or (trafficYieldSideOffsetMeters + 8.0),
+              trafficYieldSideOffsetMeters + 8.0
+            )
+            if currentSpeedMps < 2.0 then
+              sideOffsetMeters = sideOffsetMeters + 4.0
+            end
+
+            local currentCoords = GetEntityCoords(vehicle)
+            local forwardVec = GetEntityForwardVector(vehicle)
+            local rightVec = GetEntityRightVector(vehicle)
+            local forwardClearMeters = trafficYieldForwardOffsetMeters + math.max(22.0, math.min(55.0, sustainSpeedMps * 2.0))
+            if currentSpeedMps < 2.0 then
+              -- If they are hesitating in an intersection, force a much farther target ahead.
+              forwardClearMeters = forwardClearMeters + 18.0
+            end
+
+            local destX = (tonumber(currentCoords.x) or 0.0)
+              + ((tonumber(forwardVec.x) or 0.0) * forwardClearMeters)
+              + ((tonumber(rightVec.x) or 0.0) * (sideOffsetMeters * sideSign))
+            local destY = (tonumber(currentCoords.y) or 0.0)
+              + ((tonumber(forwardVec.y) or 0.0) * forwardClearMeters)
+              + ((tonumber(rightVec.y) or 0.0) * (sideOffsetMeters * sideSign))
+            local destZ = tonumber(currentCoords.z) or 0.0
+
+            pcall(function()
+              NetworkRequestControlOfEntity(vehicle)
+            end)
+
+            pcall(function()
+              SetDriveTaskDrivingStyle(driver, trafficYieldClearDrivingStyle)
+              SetDriverAbility(driver, 1.0)
+              SetDriverAggressiveness(driver, 1.0)
+              SetPedKeepTask(driver, true)
+              TaskVehicleDriveToCoord(
+                driver,
+                vehicle,
+                destX + 0.0,
+                destY + 0.0,
+                destZ + 0.0,
+                sustainSpeedMps + 0.0,
+                0,
+                GetEntityModel(vehicle),
+                trafficYieldImmediateDriveStyle,
+                1.0,
+                1.0
+              )
+            end)
+
+            if currentSpeedMps < math.max(trafficYieldPushMinSpeedMps + 1.5, 8.0) then
+              local pushSpeed = math.max(10.0, math.min(sustainSpeedMps, trafficYieldPushMinSpeedMps + 12.0))
+              pcall(function()
+                SetVehicleForwardSpeed(vehicle, pushSpeed + 0.0)
+              end)
+            end
+
+            entry.yield_drive_speed_mps = sustainSpeedMps
+          end
+
+          entry.next_reapply_ms = nowMs + math.max(250, math.min(trafficYieldReapplyMs, 450))
+        end
+
         if entry.resumed ~= true and nowMs >= (tonumber(entry.revert_at_ms) or 0) then
           local driver = entry.driver
           if trafficYieldResumeWander == true
