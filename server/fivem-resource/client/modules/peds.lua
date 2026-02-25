@@ -25,6 +25,12 @@ local useOxTargetForDocuments = GetResourceState('ox_target') == 'started'
 local trafficYieldAssistEnabled = Config.AiTrafficYieldAssistEnabled == true
 local trafficYieldAssistStates = {}
 local trafficYieldDrivingStyle = 786603
+local trafficYieldStopAtLightsFlag = 128
+local trafficYieldClearDrivingStyle = trafficYieldDrivingStyle
+if (trafficYieldClearDrivingStyle % (trafficYieldStopAtLightsFlag * 2)) >= trafficYieldStopAtLightsFlag then
+  -- Remove the stop-at-lights bit while clearing space for emergency vehicles.
+  trafficYieldClearDrivingStyle = trafficYieldClearDrivingStyle - trafficYieldStopAtLightsFlag
+end
 
 local trafficYieldPollIntervalMs = math.max(100, math.floor(tonumber(Config.AiTrafficYieldAssistPollIntervalMs) or 250))
 local trafficYieldRadiusMeters = math.max(20.0, tonumber(Config.AiTrafficYieldAssistRadiusMeters) or 70.0)
@@ -152,33 +158,47 @@ local function applyTrafficYieldAssist(target, officerVehicleSpeedMps, nowMs)
   local currentCoords = GetEntityCoords(vehicle)
   local forwardVec = GetEntityForwardVector(vehicle)
   local rightVec = GetEntityRightVector(vehicle)
-  local sideSign = trafficYieldPreferLeft and -1.0 or 1.0
-  local extraForward = math.min(8.0, math.max(0.0, (tonumber(target.speed_mps) or 0.0) * 0.8))
+  local lateralDistance = tonumber(target.lateral_distance) or 0.0
+  -- Force all yielding traffic to move right so left lanes clear for emergency vehicles.
+  local sideSign = 1.0
+
+  local targetSpeedMps = tonumber(target.speed_mps) or 0.0
+  local isStoppedOrQueued = targetSpeedMps < 1.25
+  local extraForward = math.min(8.0, math.max(0.0, targetSpeedMps * 0.8))
+  if isStoppedOrQueued then
+    -- Push the destination farther ahead so queued traffic clears intersections.
+    extraForward = extraForward + 14.0
+  end
+  local sideOffsetMeters = math.max(trafficYieldSideOffsetMeters * 2.0, trafficYieldSideOffsetMeters + 4.0)
+  sideOffsetMeters = math.min(math.max(sideOffsetMeters, math.abs(lateralDistance) + 4.0), trafficYieldLaneBandMeters + 6.0)
   local destX = (tonumber(currentCoords.x) or 0.0)
     + ((tonumber(forwardVec.x) or 0.0) * (trafficYieldForwardOffsetMeters + extraForward))
-    + ((tonumber(rightVec.x) or 0.0) * (trafficYieldSideOffsetMeters * sideSign))
+    + ((tonumber(rightVec.x) or 0.0) * (sideOffsetMeters * sideSign))
   local destY = (tonumber(currentCoords.y) or 0.0)
     + ((tonumber(forwardVec.y) or 0.0) * (trafficYieldForwardOffsetMeters + extraForward))
-    + ((tonumber(rightVec.y) or 0.0) * (trafficYieldSideOffsetMeters * sideSign))
+    + ((tonumber(rightVec.y) or 0.0) * (sideOffsetMeters * sideSign))
   local destZ = tonumber(currentCoords.z) or 0.0
 
-  local driveSpeedMps = math.max(8.0, math.min(22.0, math.max(tonumber(target.speed_mps) or 0.0, officerVehicleSpeedMps * 0.65)))
+  local driveSpeedMps = math.max(10.0, math.min(28.0, math.max(targetSpeedMps + 2.0, officerVehicleSpeedMps * 0.8)))
 
   pcall(function()
     NetworkRequestControlOfEntity(vehicle)
   end)
 
   pcall(function()
-    SetDriveTaskDrivingStyle(driver, trafficYieldDrivingStyle)
+    SetDriveTaskDrivingStyle(driver, trafficYieldClearDrivingStyle)
     SetPedKeepTask(driver, true)
-    TaskVehicleDriveToCoordLongrange(driver, vehicle, destX + 0.0, destY + 0.0, destZ + 0.0, driveSpeedMps + 0.0, trafficYieldDrivingStyle, 4.0)
+    TaskVehicleDriveToCoordLongrange(driver, vehicle, destX + 0.0, destY + 0.0, destZ + 0.0, driveSpeedMps + 0.0, trafficYieldClearDrivingStyle, 1.5)
   end)
 
   if trafficYieldPushMinSpeedMps > 0.0 then
     local currentSpeed = tonumber(GetEntitySpeed(vehicle)) or 0.0
-    if currentSpeed < trafficYieldPushMinSpeedMps and officerVehicleSpeedMps > (trafficYieldPushMinSpeedMps + 2.0) then
+    if currentSpeed < trafficYieldPushMinSpeedMps
+      and (officerVehicleSpeedMps > (trafficYieldPushMinSpeedMps + 2.0) or isStoppedOrQueued)
+    then
+      local pushSpeed = math.max(trafficYieldPushMinSpeedMps + 2.5, math.min(driveSpeedMps, trafficYieldPushMinSpeedMps + 10.0))
       pcall(function()
-        SetVehicleForwardSpeed(vehicle, trafficYieldPushMinSpeedMps + 0.0)
+        SetVehicleForwardSpeed(vehicle, pushSpeed + 0.0)
       end)
     end
   end
