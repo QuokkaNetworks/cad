@@ -35,6 +35,8 @@ local trafficYieldSideOffsetMeters = math.max(2.0, tonumber(Config.AiTrafficYiel
 local trafficYieldPreferLeft = Config.AiTrafficYieldAssistPreferLeft == true
 local trafficYieldMaxTargetsPerPulse = math.max(1, math.floor(tonumber(Config.AiTrafficYieldAssistMaxTargetsPerPulse) or 4))
 local trafficYieldResumeAfterMs = math.max(1000, math.floor(tonumber(Config.AiTrafficYieldAssistResumeAfterMs) or 7000))
+local trafficYieldReapplyMs = math.max(250, math.floor(tonumber(Config.AiTrafficYieldAssistReapplyMs) or 900))
+local trafficYieldResumeWander = Config.AiTrafficYieldAssistResumeWander == true
 local trafficYieldCooldownMs = math.max(
   trafficYieldResumeAfterMs,
   math.floor(tonumber(Config.AiTrafficYieldAssistCooldownMs) or 5000)
@@ -95,7 +97,12 @@ local function shouldAffectTrafficVehicle(vehicle, playerVehicle, playerCoords, 
 
   local existing = trafficYieldAssistStates[vehicle]
   if type(existing) == 'table' and nowMs < (tonumber(existing.cooldown_until_ms) or 0) then
-    return nil
+    if existing.resumed == true then
+      return nil
+    end
+    if nowMs < (tonumber(existing.next_reapply_ms) or 0) then
+      return nil
+    end
   end
 
   local coords = GetEntityCoords(vehicle)
@@ -180,6 +187,7 @@ local function applyTrafficYieldAssist(target, officerVehicleSpeedMps, nowMs)
     driver = driver,
     revert_at_ms = nowMs + trafficYieldResumeAfterMs,
     cooldown_until_ms = nowMs + trafficYieldCooldownMs,
+    next_reapply_ms = nowMs + trafficYieldReapplyMs,
     resumed = false,
     resume_speed_mps = math.max(8.0, math.min(20.0, driveSpeedMps)),
   }
@@ -201,7 +209,10 @@ local function tickTrafficYieldRestore(nowMs)
       else
         if entry.resumed ~= true and nowMs >= (tonumber(entry.revert_at_ms) or 0) then
           local driver = entry.driver
-          if driver and driver ~= 0 and DoesEntityExist(driver) and GetPedInVehicleSeat(vehicle, -1) == driver and not IsPedAPlayer(driver) then
+          if trafficYieldResumeWander == true
+            and driver and driver ~= 0 and DoesEntityExist(driver)
+            and GetPedInVehicleSeat(vehicle, -1) == driver and not IsPedAPlayer(driver)
+          then
             pcall(function()
               SetDriveTaskDrivingStyle(driver, trafficYieldDrivingStyle)
               SetPedKeepTask(driver, true)
