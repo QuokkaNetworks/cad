@@ -1,8 +1,10 @@
 const CAD_BRIDGE_RESOURCE = 'cad_bridge';
-const CAD_BRIDGE_ENDPOINTS = [
-  `https://cfx-nui-${CAD_BRIDGE_RESOURCE}`,
-  `https://${CAD_BRIDGE_RESOURCE}`,
-];
+const IS_PROD = typeof import.meta !== 'undefined' && import.meta.env?.PROD === true;
+// Qbox NPWD is most reliable with the explicit cfx-nui endpoint. The generic
+// `https://cad_bridge` fallback can trigger browser-style dialogs in some CEF builds.
+const CAD_BRIDGE_ENDPOINTS = IS_PROD
+  ? [`https://cfx-nui-${CAD_BRIDGE_RESOURCE}`]
+  : [`https://cfx-nui-${CAD_BRIDGE_RESOURCE}`, `https://${CAD_BRIDGE_RESOURCE}`];
 
 function withTimeout(timeoutMs) {
   const timeout = Math.max(1000, Number(timeoutMs) || 10000);
@@ -27,6 +29,7 @@ async function postJson(url, body, timeoutMs) {
         'Content-Type': 'application/json; charset=UTF-8',
       },
       cache: 'no-store',
+      credentials: 'omit',
       signal: control.signal,
       body: JSON.stringify(body || {}),
     });
@@ -71,7 +74,11 @@ export async function fetchCadBridgeNui(eventName, data, options = {}) {
   let lastErr = null;
   for (const baseUrl of CAD_BRIDGE_ENDPOINTS) {
     try {
-      return await postJson(`${baseUrl}/${event}`, data, timeoutMs);
+      const response = await postJson(`${baseUrl}/${event}`, data, timeoutMs);
+      if (response && typeof response === 'object' && !response.__endpoint) {
+        return { ...response, __endpoint: baseUrl };
+      }
+      return response;
     } catch (err) {
       lastErr = err;
     }

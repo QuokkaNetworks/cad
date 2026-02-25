@@ -154,7 +154,11 @@ export default function App() {
 
   function setDuration(value) {
     const next = Math.max(1, Math.floor(Number(value) || DEFAULT_DURATION));
-    setForm((current) => ({ ...current, duration_days: next }));
+    setForm((current) => {
+      const options = normalizeDurationOptions(current.duration_options, current.duration_days || DEFAULT_DURATION);
+      if (!options.includes(next)) return current;
+      return { ...current, duration_days: next };
+    });
   }
 
   async function handleLoadVehicle() {
@@ -206,12 +210,21 @@ export default function App() {
     const plate = String(form.plate || '').trim().toUpperCase();
     const vehicleModel = String(form.vehicle_model || '').trim();
     const vehicleColour = String(form.vehicle_colour || '').trim();
-    const durationDays = Math.max(1, Math.floor(Number(form.duration_days || DEFAULT_DURATION) || DEFAULT_DURATION));
+    const allowedDurations = normalizeDurationOptions(form.duration_options, form.duration_days || DEFAULT_DURATION);
+    const requestedDuration = Math.max(1, Math.floor(Number(form.duration_days || DEFAULT_DURATION) || DEFAULT_DURATION));
+    const durationDays = allowedDurations.includes(requestedDuration) ? requestedDuration : allowedDurations[0];
 
     if (!ownerName || !plate || !vehicleModel) {
       setStatus({
         type: 'error',
         message: 'Owner, plate, and vehicle model are required. Load the current vehicle again if any field is blank.',
+      });
+      return;
+    }
+    if (!allowedDurations.includes(durationDays)) {
+      setStatus({
+        type: 'error',
+        message: 'Select one of the available registration periods.',
       });
       return;
     }

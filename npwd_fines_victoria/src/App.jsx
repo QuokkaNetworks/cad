@@ -187,6 +187,48 @@ export default function App() {
     message: 'Load your infringement notices and pay eligible fines online through Fines Victoria.',
   });
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const originalAlert = window.alert;
+    const originalConfirm = window.confirm;
+    const originalPrompt = window.prompt;
+
+    const reportBlockedDialog = (kind, message) => {
+      const text = String(message || '').trim();
+      const detail = text ? ` (${text.slice(0, 180)})` : '';
+      setStatus({
+        type: 'error',
+        message: `A native browser ${kind} dialog was blocked inside the phone app${detail}. This usually means an old app bundle or browser fallback path was triggered.`,
+      });
+      try {
+        // Helpful for F8/CEF devtools if available.
+        // eslint-disable-next-line no-console
+        console.warn(`[FinesVictoria] Blocked native ${kind} dialog`, message);
+      } catch {
+        // no-op
+      }
+    };
+
+    window.alert = (message) => {
+      reportBlockedDialog('alert', message);
+    };
+    window.confirm = (message) => {
+      reportBlockedDialog('confirm', message);
+      return false;
+    };
+    window.prompt = (message) => {
+      reportBlockedDialog('prompt', message);
+      return null;
+    };
+
+    return () => {
+      window.alert = originalAlert;
+      window.confirm = originalConfirm;
+      window.prompt = originalPrompt;
+    };
+  }, []);
+
   async function loadNotices({ silent = false } = {}) {
     if (loading || refreshing || payingNoticeId > 0) return;
     if (silent) setRefreshing(true);
@@ -271,7 +313,11 @@ export default function App() {
     });
 
     try {
+      // eslint-disable-next-line no-console
+      console.log('[FinesVictoria] Starting payment request', { noticeId });
       const res = await fetchCadBridgeNui('cadBridgeNpwdFinesVicPay', { notice_id: noticeId }, { timeoutMs: 30000 });
+      // eslint-disable-next-line no-console
+      console.log('[FinesVictoria] Payment response', res);
       const ok = res?.ok === true || res?.success === true;
       if (!ok) {
         const fundsDeducted = res?.funds_deducted === true;

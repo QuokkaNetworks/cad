@@ -116,6 +116,50 @@ local function notifyWarn(title, description)
   print(('[cad_bridge] %s'):format(tostring(description or '')))
 end
 
+local function getVehicleRegistrationDurationPresetOptions()
+  local out = {}
+  local seen = {}
+  local configured = type(Config.VehicleRegistrationDurationOptions) == 'table' and Config.VehicleRegistrationDurationOptions or {}
+  for _, raw in pairs(configured) do
+    local value = math.floor(tonumber(raw) or 0)
+    if value > 0 and not seen[value] then
+      seen[value] = true
+      out[#out + 1] = value
+    end
+  end
+  table.sort(out)
+  return out
+end
+
+local function resolveVehicleRegistrationDurationDays(requestedDays)
+  local defaultDays = math.floor(tonumber(Config.VehicleRegistrationDefaultDays or 35) or 35)
+  if defaultDays < 1 then defaultDays = 35 end
+
+  local requested = math.floor(tonumber(requestedDays or 0) or 0)
+  if requested < 1 then requested = defaultDays end
+
+  local options = getVehicleRegistrationDurationPresetOptions()
+  if #options <= 0 then
+    return requested, {}, true
+  end
+
+  local fallback = options[1]
+  for _, value in ipairs(options) do
+    if value == defaultDays then
+      fallback = value
+      break
+    end
+  end
+
+  for _, value in ipairs(options) do
+    if value == requested then
+      return value, options, true
+    end
+  end
+
+  return fallback, options, false
+end
+
 local GTA_COLOUR_NAMES = {
   [0] = 'Black', [1] = 'Graphite', [2] = 'Black Steel', [3] = 'Dark Silver', [4] = 'Silver',
   [5] = 'Bluish Silver', [6] = 'Rolled Steel', [7] = 'Shadow Silver', [8] = 'Stone Silver', [9] = 'Midnight Silver',
@@ -522,14 +566,15 @@ local function buildCurrentSeatedVehicleRegistrationPrefill()
   end
 
   local ownerName = getLocalCharacterFullName()
+  local resolvedDefaultDays, durationOptions = resolveVehicleRegistrationDurationDays(Config.VehicleRegistrationDefaultDays or 35)
   return {
     plate = plate,
     vehicle_model = trim(model or ''),
     vehicle_colour = getVehicleColourLabel(vehicle),
     owner_name = ownerName,
     character_name = ownerName,
-    duration_options = type(Config.VehicleRegistrationDurationOptions) == 'table' and Config.VehicleRegistrationDurationOptions or nil,
-    default_duration_days = tonumber(Config.VehicleRegistrationDefaultDays or 35) or 35,
+    duration_options = durationOptions,
+    default_duration_days = resolvedDefaultDays,
     source = 'npwd_vicroads',
   }, ''
 end
@@ -544,8 +589,8 @@ RegisterNUICallback('cadBridgeRegistrationSubmit', function(data, cb)
   local model = trim(data and data.vehicle_model or data and data.model or '')
   local colour = trim(data and data.vehicle_colour or data and data.colour or data and data.color or '')
   local ownerName = trim(data and data.owner_name or data and data.character_name or '')
-  local durationDays = tonumber(data and data.duration_days or 0) or tonumber(Config.VehicleRegistrationDefaultDays or 35) or 35
-  if durationDays < 1 then durationDays = 1 end
+  local requestedDurationDays = tonumber(data and data.duration_days or 0) or tonumber(Config.VehicleRegistrationDefaultDays or 35) or 35
+  local durationDays, _, durationAllowed = resolveVehicleRegistrationDurationDays(requestedDurationDays)
 
   if plate == '' or model == '' then
     if cb then cb({ ok = false, error = 'invalid_form' }) end
@@ -597,7 +642,7 @@ RegisterNUICallback('cadBridgeNpwdVicRoadsGetPrefill', function(_data, cb)
     return
   end
 
-  payload.duration_days = tonumber(payload.default_duration_days or Config.VehicleRegistrationDefaultDays or 35) or 35
+  payload.duration_days = select(1, resolveVehicleRegistrationDurationDays(payload.default_duration_days or Config.VehicleRegistrationDefaultDays or 35))
   if cb then cb({ ok = true, payload = payload }) end
 end)
 
@@ -619,7 +664,7 @@ RegisterNUICallback('cadBridgeNpwdVicRoadsSubmitRegistration', function(data, cb
   local colour = trim(data and data.vehicle_colour or data and data.colour or data and data.color or '')
   local ownerName = trim(data and data.owner_name or data and data.character_name or '')
   local durationDays = tonumber(data and data.duration_days or 0) or tonumber(Config.VehicleRegistrationDefaultDays or 35) or 35
-  if durationDays < 1 then durationDays = 1 end
+  durationDays = select(1, resolveVehicleRegistrationDurationDays(durationDays))
 
   if plate == '' or model == '' then
     if cb then
@@ -639,6 +684,17 @@ RegisterNUICallback('cadBridgeNpwdVicRoadsSubmitRegistration', function(data, cb
         error = 'missing_owner',
         error_code = 'missing_owner',
         message = 'Unable to determine your current character name. Re-log and try again.',
+      })
+    end
+    return
+  end
+  if durationAllowed ~= true then
+    if cb then
+      cb({
+        ok = false,
+        error = 'invalid_duration_period',
+        error_code = 'invalid_duration_period',
+        message = 'Select one of the available registration periods.',
       })
     end
     return

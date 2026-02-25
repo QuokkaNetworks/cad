@@ -68,25 +68,29 @@
       end
 
       if status == 403 then
+        logDocumentFailure('registration-create-rejected', {
+          reason = 'ownership_mismatch',
+          http_status = tonumber(status) or 0,
+          api_error = parsedError,
+          payload = summarizeRegistrationPayloadForLog(payload),
+        })
+        local ownershipMessage = 'You are not the owner of this vehicle, so you cannot register it.'
         local parsedErrorLower = string.lower(trim(parsedError or ''))
-        if parsedErrorLower:find('do not own', 1, true)
+        if parsedError ~= '' and (
+          parsedErrorLower:find('do not own', 1, true)
           or parsedErrorLower:find('ownership', 1, true)
-          or parsedErrorLower:find('player_vehicles', 1, true) then
-          logDocumentFailure('registration-create-rejected', {
-            reason = 'ownership_mismatch',
-            http_status = tonumber(status) or 0,
-            api_error = parsedError,
-            payload = summarizeRegistrationPayloadForLog(payload),
-          })
-          local ownershipMessage = 'You are not the owner of this vehicle, so you cannot register it.'
-          notifyPlayer(s, ownershipMessage)
-          emitVehicleRegistrationSubmitResult({
-            ok = false,
-            error_code = 'not_owner',
-            message = ownershipMessage,
-          })
-          return
+          or parsedErrorLower:find('owner', 1, true)
+          or parsedErrorLower:find('cannot register', 1, true)
+        ) then
+          ownershipMessage = parsedError
         end
+        notifyPlayer(s, ownershipMessage)
+        emitVehicleRegistrationSubmitResult({
+          ok = false,
+          error_code = 'not_owner',
+          message = ownershipMessage,
+        })
+        return
       end
 
       logDocumentFailure('registration-create-failed', {
