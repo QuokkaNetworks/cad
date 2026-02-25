@@ -72,10 +72,9 @@ function getImageBoundsLatLng() {
 }
 
 function rectToLatLngBounds(rect) {
-  return L.latLngBounds(
-    L.latLng(rect.y, rect.x),
-    L.latLng(rect.y + rect.height, rect.x + rect.width),
-  );
+  const topLeft = imagePointToLatLng({ x: rect.x, y: rect.y });
+  const bottomRight = imagePointToLatLng({ x: rect.x + rect.width, y: rect.y + rect.height });
+  return L.latLngBounds(bottomRight, topLeft);
 }
 
 function isImagePointInsideAtlas(point) {
@@ -109,7 +108,11 @@ function imageToWorldPoint(x, y) {
 }
 
 function imagePointToLatLng(point) {
-  return L.latLng(Number(point.y) || 0, Number(point.x) || 0);
+  const x = Number(point?.x) || 0;
+  const yTop = Number(point?.y) || 0;
+  // Leaflet CRS.Simple uses a "north-up" Y axis (lat increases upward), while image
+  // pixels are top-origin (Y increases downward). Convert explicitly here.
+  return L.latLng(MAP_IMAGE_SIZE.height - yTop, x);
 }
 
 function worldToLatLng(x, y) {
@@ -117,7 +120,9 @@ function worldToLatLng(x, y) {
 }
 
 function latLngToImagePoint(latlng) {
-  return { x: Number(latlng?.lng) || 0, y: Number(latlng?.lat) || 0 };
+  const x = Number(latlng?.lng) || 0;
+  const yBottomOrigin = Number(latlng?.lat) || 0;
+  return { x, y: MAP_IMAGE_SIZE.height - yBottomOrigin };
 }
 
 function worldDistanceToImagePixels(distance) {
