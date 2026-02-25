@@ -21,6 +21,8 @@ const MAP_ATLAS_RECT_NUDGE_PX = { x: 0, y: 0, width: 0, height: 0 };
 const MAP_SUBGRID_WORLD_STEP = 1500;
 const MAP_FIT_PADDING_PX = [16, 16];
 const MAP_WHOLE_PADDING_PX = [8, 8];
+const LEAFLET_DEFAULT_MIN_ZOOM = -2;
+const LEAFLET_MAX_ZOOM = 4.5;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -667,7 +669,7 @@ export default function DispatchMap() {
 
   return (
     <div className="h-[calc(100vh-56px)] min-h-0 flex flex-col gap-4 overflow-hidden">
-      <div className="bg-cad-card border border-cad-border rounded-lg p-4 flex-none">
+      <div className="hidden bg-cad-card border border-cad-border rounded-lg p-4 flex-none">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="text-xs uppercase tracking-wide text-cad-muted">Dispatch Operations</div>
@@ -717,9 +719,9 @@ export default function DispatchMap() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.85fr)_400px] gap-4 flex-1 min-h-0">
-        <div className="bg-cad-card border border-cad-border rounded-lg overflow-hidden flex flex-col min-h-0">
-          <div className="px-4 py-3 border-b border-cad-border/80 bg-gradient-to-r from-slate-950/45 via-cad-card to-cad-card flex flex-wrap items-center justify-between gap-3">
+      <div className="grid grid-cols-1 gap-4 flex-1 min-h-0">
+        <div className="overflow-hidden flex flex-col min-h-0">
+          <div className="px-3 sm:px-4 py-2.5 border-b border-cad-border/80 bg-gradient-to-r from-slate-950/45 via-cad-card to-cad-card flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="font-semibold">Dispatch Area Map</div>
               <div className="text-[11px] text-cad-muted mt-0.5">
@@ -733,7 +735,7 @@ export default function DispatchMap() {
             </div>
           </div>
           {error ? <div className="px-4 pt-4 text-sm text-rose-300">{error}</div> : null}
-          <div className="p-4 flex-1 min-h-0 flex flex-col gap-3">
+          <div className="p-2 sm:p-3 flex-1 min-h-0 flex flex-col gap-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 {[
@@ -836,7 +838,7 @@ export default function DispatchMap() {
           </div>
         </div>
 
-        <div className="grid grid-rows-2 gap-4 min-h-0">
+        <div className="hidden grid grid-rows-2 gap-4 min-h-0">
           <div className="bg-cad-card border border-cad-border rounded-lg overflow-hidden flex flex-col min-h-0">
             <div className="px-4 py-3 border-b border-cad-border flex items-center justify-between">
               <div className="font-semibold">Active Calls</div>
@@ -905,7 +907,7 @@ export default function DispatchMap() {
         </div>
       </div>
 
-      {(selectedCall || selectedUnit) ? (
+      {false && (selectedCall || selectedUnit) ? (
         <div className="flex-none bg-cad-card border border-cad-border rounded-lg p-4">
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 text-sm">
             <div className="rounded-md border border-cad-border bg-cad-surface p-3">
