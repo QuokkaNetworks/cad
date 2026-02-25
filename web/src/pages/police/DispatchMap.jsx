@@ -14,7 +14,7 @@ const WORLD_BOUNDS = {
   maxY: GTA_MAP_TILE_UNITS * 2,
 };
 
-const MAP_IMAGE_SRC = '/maps/FullMap.png';
+const MAP_IMAGE_SRC = `${import.meta.env.BASE_URL || '/'}maps/FullMap.png`;
 const MAP_IMAGE_SIZE = { width: 6144, height: 9216 };
 const MAP_ALPHA_CONTENT_BOUNDS = { left: 75, top: 348, right: 6131, bottom: 8576 };
 const MAP_ATLAS_RECT_NUDGE_PX = { x: 0, y: 0, width: 0, height: 0 };
@@ -246,6 +246,8 @@ export default function DispatchMap() {
   const [lastLoadedAt, setLastLoadedAt] = useState('');
   const [cursorWorld, setCursorWorld] = useState(null);
   const [mapUi, setMapUi] = useState({ zoom: null, zoomPercent: 100, ready: false });
+  const [mapInitError, setMapInitError] = useState('');
+  const [mapImageError, setMapImageError] = useState('');
   const [layerVisibility, setLayerVisibility] = useState({
     basemap: true,
     grid: true,
@@ -402,89 +404,139 @@ export default function DispatchMap() {
   useEffect(() => {
     const container = mapContainerRef.current;
     if (!container || leafletRef.current.map) return undefined;
+    setMapInitError('');
+    setMapImageError('');
+    setMapUi((prev) => ({ ...prev, ready: false }));
 
-    const map = L.map(container, {
-      crs: L.CRS.Simple,
-      attributionControl: false,
-      zoomControl: false,
-      preferCanvas: true,
-      minZoom: LEAFLET_DEFAULT_MIN_ZOOM,
-      maxZoom: LEAFLET_MAX_ZOOM,
-      zoomSnap: 0.1,
-      zoomDelta: 0.25,
-      wheelPxPerZoomLevel: 120,
-      maxBoundsViscosity: 1,
-    });
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-    map.createPane('dispatchGridPane');
-    map.getPane('dispatchGridPane').style.zIndex = '430';
-    map.createPane('dispatchZonePane');
-    map.getPane('dispatchZonePane').style.zIndex = '440';
-    map.createPane('dispatchMarkerPane');
-    map.getPane('dispatchMarkerPane').style.zIndex = '470';
-
-    const imageOverlay = L.imageOverlay(MAP_IMAGE_SRC, imageBounds, {
-      interactive: false,
-      opacity: 0.96,
-      className: 'dispatch-avl-image-overlay',
-    }).addTo(map);
-
-    const groups = {
-      grid: L.layerGroup().addTo(map),
-      zones: L.layerGroup().addTo(map),
-      calls: L.layerGroup().addTo(map),
-      units: L.layerGroup().addTo(map),
-      highlights: L.layerGroup().addTo(map),
-    };
-
-    map.setMaxBounds(imageBounds.pad(0.03));
-    const wholeZoom = map.getBoundsZoom(imageBounds, false, L.point(...MAP_WHOLE_PADDING_PX));
-    if (Number.isFinite(wholeZoom)) map.setMinZoom(Math.floor(wholeZoom * 10) / 10);
-    map.fitBounds(atlasBounds, { padding: MAP_FIT_PADDING_PX, animate: false });
-
-    const onMoveOrZoom = () => syncMapUiState();
-    const onMouseMove = (e) => {
-      const imagePoint = latLngToImagePoint(e.latlng);
-      if (!isImagePointInsideAtlas(imagePoint)) return setCursorWorld(null);
-      return setCursorWorld(imageToWorldPoint(imagePoint.x, imagePoint.y));
-    };
-    const onMouseOut = () => setCursorWorld(null);
-
-    map.on('zoomend moveend', onMoveOrZoom);
-    map.on('mousemove', onMouseMove);
-    map.on('mouseout', onMouseOut);
-
+    let map = null;
+    let imageOverlay = null;
+    let groups = null;
     const cleanupFns = [];
-    if (typeof ResizeObserver !== 'undefined') {
-      const observer = new ResizeObserver(() => {
-        map.invalidateSize(false);
-        syncMapUiState();
+
+    try {
+      map = L.map(container, {
+        crs: L.CRS.Simple,
+        attributionControl: false,
+        zoomControl: false,
+        preferCanvas: false,
+        minZoom: LEAFLET_DEFAULT_MIN_ZOOM,
+        maxZoom: LEAFLET_MAX_ZOOM,
+        zoomSnap: 0.1,
+        zoomDelta: 0.25,
+        wheelPxPerZoomLevel: 120,
+        maxBoundsViscosity: 1,
       });
-      observer.observe(container);
-      cleanupFns.push(() => observer.disconnect());
-    } else {
-      const onResize = () => {
-        map.invalidateSize(false);
-        syncMapUiState();
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      map.createPane('dispatchGridPane');
+      map.getPane('dispatchGridPane').style.zIndex = '430';
+      map.createPane('dispatchZonePane');
+      map.getPane('dispatchZonePane').style.zIndex = '440';
+      map.createPane('dispatchMarkerPane');
+      map.getPane('dispatchMarkerPane').style.zIndex = '470';
+
+      imageOverlay = L.imageOverlay(MAP_IMAGE_SRC, imageBounds, {
+        interactive: false,
+        opacity: 0.96,
+        className: 'dispatch-avl-image-overlay',
+      }).addTo(map);
+
+      const onImageLoad = () => {
+        setMapImageError('');
+        requestAnimationFrame(() => {
+          try {
+            map.invalidateSize(false);
+            syncMapUiState();
+          } catch {
+            // no-op
+          }
+        });
       };
-      window.addEventListener('resize', onResize);
-      cleanupFns.push(() => window.removeEventListener('resize', onResize));
+      const onImageError = () => {
+        setMapImageError(`Failed to load map image: ${MAP_IMAGE_SRC}`);
+      };
+      imageOverlay.on('load', onImageLoad);
+      imageOverlay.on('error', onImageError);
+      cleanupFns.push(() => {
+        try { imageOverlay.off('load', onImageLoad); } catch { /* no-op */ }
+        try { imageOverlay.off('error', onImageError); } catch { /* no-op */ }
+      });
+
+      groups = {
+        grid: L.layerGroup().addTo(map),
+        zones: L.layerGroup().addTo(map),
+        calls: L.layerGroup().addTo(map),
+        units: L.layerGroup().addTo(map),
+        highlights: L.layerGroup().addTo(map),
+      };
+
+      map.setMaxBounds(imageBounds.pad(0.03));
+      const wholeZoom = map.getBoundsZoom(imageBounds, false, L.point(...MAP_WHOLE_PADDING_PX));
+      if (Number.isFinite(wholeZoom)) map.setMinZoom(Math.floor(wholeZoom * 10) / 10);
+      map.fitBounds(atlasBounds, { padding: MAP_FIT_PADDING_PX, animate: false });
+
+      const onMoveOrZoom = () => syncMapUiState();
+      const onMouseMove = (e) => {
+        const imagePoint = latLngToImagePoint(e.latlng);
+        if (!isImagePointInsideAtlas(imagePoint)) return setCursorWorld(null);
+        return setCursorWorld(imageToWorldPoint(imagePoint.x, imagePoint.y));
+      };
+      const onMouseOut = () => setCursorWorld(null);
+
+      map.on('zoomend moveend', onMoveOrZoom);
+      map.on('mousemove', onMouseMove);
+      map.on('mouseout', onMouseOut);
+      cleanupFns.push(() => {
+        try {
+          map.off('zoomend moveend', onMoveOrZoom);
+          map.off('mousemove', onMouseMove);
+          map.off('mouseout', onMouseOut);
+        } catch {
+          // no-op
+        }
+      });
+
+      if (typeof ResizeObserver !== 'undefined') {
+        const observer = new ResizeObserver(() => {
+          map.invalidateSize(false);
+          syncMapUiState();
+        });
+        observer.observe(container);
+        cleanupFns.push(() => observer.disconnect());
+      } else {
+        const onResize = () => {
+          map.invalidateSize(false);
+          syncMapUiState();
+        };
+        window.addEventListener('resize', onResize);
+        cleanupFns.push(() => window.removeEventListener('resize', onResize));
+      }
+
+      // Leaflet often initializes before flex layouts settle. Re-run size calc a few times.
+      [0, 16, 80, 240].forEach((delay) => {
+        const timer = window.setTimeout(() => {
+          try {
+            map.invalidateSize(false);
+            syncMapUiState();
+          } catch {
+            // no-op
+          }
+        }, delay);
+        cleanupFns.push(() => window.clearTimeout(timer));
+      });
+
+      leafletRef.current = { map, imageOverlay, groups, cleanupFns };
+      syncMapUiState();
+    } catch (err) {
+      setMapInitError(err?.message || 'Failed to initialise map view');
+      try { map?.remove(); } catch { /* no-op */ }
+      leafletRef.current = { map: null, imageOverlay: null, groups: null, cleanupFns: [] };
+      return undefined;
     }
 
-    leafletRef.current = { map, imageOverlay, groups, cleanupFns };
-    syncMapUiState();
-
     return () => {
-      try {
-        map.off('zoomend moveend', onMoveOrZoom);
-        map.off('mousemove', onMouseMove);
-        map.off('mouseout', onMouseOut);
-      } catch {
-        // no-op
-      }
       cleanupFns.forEach((fn) => { try { fn(); } catch { /* no-op */ } });
-      map.remove();
+      try { map?.remove(); } catch { /* no-op */ }
       leafletRef.current = { map: null, imageOverlay: null, groups: null, cleanupFns: [] };
     };
   }, [atlasBounds, imageBounds, syncMapUiState]);
@@ -759,6 +811,26 @@ export default function DispatchMap() {
 
               <div className="absolute inset-0 p-2 sm:p-3">
                 <div ref={mapContainerRef} className="dispatch-avl-leaflet h-full w-full rounded-md" />
+                {(mapInitError || mapImageError || !mapUi.ready) ? (
+                  <div className="absolute inset-2 sm:inset-3 pointer-events-none flex items-center justify-center">
+                    <div className={`max-w-xl rounded-md border px-4 py-3 text-sm shadow-lg ${
+                      (mapInitError || mapImageError)
+                        ? 'border-rose-400/30 bg-rose-950/70 text-rose-100'
+                        : 'border-white/10 bg-black/45 text-slate-200'
+                    }`}>
+                      <div className="font-semibold">
+                        {mapInitError || mapImageError ? 'Map failed to render' : 'Loading map canvas...'}
+                      </div>
+                      {(mapInitError || mapImageError) ? (
+                        <div className="mt-1 text-xs sm:text-sm">{mapInitError || mapImageError}</div>
+                      ) : (
+                        <div className="mt-1 text-xs sm:text-sm text-slate-300">
+                          Initialising Leaflet and loading `FullMap.png`
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

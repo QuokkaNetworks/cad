@@ -7,12 +7,20 @@
     #020617;
 }
 
+.dispatch-avl-leaflet.leaflet-container,
 .dispatch-avl-leaflet .leaflet-container {
   height: 100%;
   width: 100%;
   background: rgba(2, 6, 23, 0.92);
   font: inherit;
   outline: none;
+}
+
+.dispatch-avl-leaflet .leaflet-pane img,
+.dispatch-avl-leaflet .leaflet-image-layer,
+.dispatch-avl-leaflet .leaflet-tile {
+  max-width: none !important;
+  max-height: none !important;
 }
 
 .dispatch-avl-leaflet .leaflet-bar {
@@ -104,4 +112,3 @@
 .dispatch-avl-leaflet .leaflet-tooltip.dispatch-avl-tooltip--call {
   color: #fde68a;
 }
-
