@@ -36,6 +36,10 @@ set "RESOURCE_PACK_SCRIPT=deploy\scripts\package-quokkacad.ps1"
 set "RESOURCE_PACK_CAD_MANIFEST=%RESOURCE_PACK_DIR%\cad_bridge\fxmanifest.lua"
 set "RESOURCE_PACK_VICROADS_MANIFEST=%RESOURCE_PACK_DIR%\npwd_vicroads\fxmanifest.lua"
 set "RESOURCE_PACK_FINES_MANIFEST=%RESOURCE_PACK_DIR%\npwd_fines_victoria\fxmanifest.lua"
+set "RESOURCE_PACK_CAD_VICROADS_REMOTE=%RESOURCE_PACK_DIR%\cad_bridge\web\dist\remoteEntry.js"
+set "RESOURCE_PACK_CAD_FINES_REMOTE=%RESOURCE_PACK_DIR%\cad_bridge\web\finesvic-dist\remoteEntry.js"
+set "RESOURCE_PACK_VICROADS_REMOTE=%RESOURCE_PACK_DIR%\npwd_vicroads\web\dist\remoteEntry.js"
+set "RESOURCE_PACK_FINES_REMOTE=%RESOURCE_PACK_DIR%\npwd_fines_victoria\web\dist\remoteEntry.js"
 set "npm_config_production=false"
 set "npm_config_include=dev"
 
@@ -238,16 +242,30 @@ if "!UPDATED!"=="1" (
   )
 )
 
-if "!UPDATED!"=="1" set "PACK_RESOURCES=1"
+REM Always re-package the FiveM resource pack on startup so cad_bridge-hosted NPWD
+REM remotes and standalone NPWD app resources stay in sync. If the repo was not
+REM updated, we can skip rebuilding the NPWD apps and just re-sync/repack.
+set "PACK_RESOURCES=1"
 if not exist "%RESOURCE_PACK_CAD_MANIFEST%" set "PACK_RESOURCES=1"
 if not exist "%RESOURCE_PACK_VICROADS_MANIFEST%" set "PACK_RESOURCES=1"
 if not exist "%RESOURCE_PACK_FINES_MANIFEST%" set "PACK_RESOURCES=1"
+if not exist "%RESOURCE_PACK_CAD_VICROADS_REMOTE%" set "PACK_RESOURCES=1"
+if not exist "%RESOURCE_PACK_CAD_FINES_REMOTE%" set "PACK_RESOURCES=1"
+if not exist "%RESOURCE_PACK_VICROADS_REMOTE%" set "PACK_RESOURCES=1"
+if not exist "%RESOURCE_PACK_FINES_REMOTE%" set "PACK_RESOURCES=1"
 if "!PACK_RESOURCES!"=="1" (
   if exist "%RESOURCE_PACK_SCRIPT%" (
     where %POWERSHELL_BIN% >nul 2>nul
     if errorlevel 1 set "POWERSHELL_BIN=powershell.exe"
-    echo [CAD] Packaging FiveM resources into %RESOURCE_PACK_DIR%...
-    call %POWERSHELL_BIN% -NoProfile -ExecutionPolicy Bypass -File "%RESOURCE_PACK_SCRIPT%"
+    set "RESOURCE_PACK_ARGS="
+    if not "!UPDATED!"=="1" set "RESOURCE_PACK_ARGS=-SkipBuild"
+    if defined RESOURCE_PACK_ARGS (
+      echo [CAD] Packaging FiveM resources into %RESOURCE_PACK_DIR% ^(!RESOURCE_PACK_ARGS!^)...
+      call %POWERSHELL_BIN% -NoProfile -ExecutionPolicy Bypass -File "%RESOURCE_PACK_SCRIPT%" !RESOURCE_PACK_ARGS!
+    ) else (
+      echo [CAD] Packaging FiveM resources into %RESOURCE_PACK_DIR%...
+      call %POWERSHELL_BIN% -NoProfile -ExecutionPolicy Bypass -File "%RESOURCE_PACK_SCRIPT%"
+    )
     if errorlevel 1 goto :fail
     if not exist "%RESOURCE_PACK_CAD_MANIFEST%" (
       echo [CAD] ERROR: Packaged resource missing cad_bridge manifest: %RESOURCE_PACK_CAD_MANIFEST%
@@ -259,6 +277,22 @@ if "!PACK_RESOURCES!"=="1" (
     )
     if not exist "%RESOURCE_PACK_FINES_MANIFEST%" (
       echo [CAD] ERROR: Packaged resource missing npwd_fines_victoria manifest: %RESOURCE_PACK_FINES_MANIFEST%
+      goto :fail
+    )
+    if not exist "%RESOURCE_PACK_CAD_VICROADS_REMOTE%" (
+      echo [CAD] ERROR: Packaged cad_bridge bundle missing VicRoads remoteEntry: %RESOURCE_PACK_CAD_VICROADS_REMOTE%
+      goto :fail
+    )
+    if not exist "%RESOURCE_PACK_CAD_FINES_REMOTE%" (
+      echo [CAD] ERROR: Packaged cad_bridge bundle missing Fines Victoria remoteEntry: %RESOURCE_PACK_CAD_FINES_REMOTE%
+      goto :fail
+    )
+    if not exist "%RESOURCE_PACK_VICROADS_REMOTE%" (
+      echo [CAD] ERROR: Packaged npwd_vicroads bundle missing remoteEntry: %RESOURCE_PACK_VICROADS_REMOTE%
+      goto :fail
+    )
+    if not exist "%RESOURCE_PACK_FINES_REMOTE%" (
+      echo [CAD] ERROR: Packaged npwd_fines_victoria bundle missing remoteEntry: %RESOURCE_PACK_FINES_REMOTE%
       goto :fail
     )
     echo [CAD] Resource pack verified: cad_bridge + npwd_vicroads + npwd_fines_victoria

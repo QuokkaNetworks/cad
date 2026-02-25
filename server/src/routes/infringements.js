@@ -5,7 +5,9 @@ const {
   InfringementNoticePrintAudit,
   Departments,
   Units,
+  DriverLicenses,
 } = require('../db/sqlite');
+const { getCharacterById } = require('../db/qbox');
 const { audit } = require('../utils/audit');
 const FiveMPrintJobs = require('../services/fivemPrintJobs');
 const { buildPrintedDocumentPdfAttachment } = require('../services/printedDocumentPdf');
@@ -84,6 +86,37 @@ function buildPrintJobDeliveryTarget(req) {
     steam_id: String(req?.user?.steam_id || '').trim(),
     discord_id: String(req?.user?.discord_id || '').trim(),
   };
+}
+
+async function resolveOfficerSignatureName(req, unit) {
+  const activeLink = req?.fivemLink || null;
+  const linkedCitizenId = String(activeLink?.citizen_id || '').trim();
+
+  if (linkedCitizenId) {
+    try {
+      const qboxCharacter = await getCharacterById(linkedCitizenId);
+      const qboxFullName = String([
+        String(qboxCharacter?.firstname || '').trim(),
+        String(qboxCharacter?.lastname || '').trim(),
+      ].filter(Boolean).join(' ')).trim();
+      if (qboxFullName) return qboxFullName;
+    } catch (err) {
+      // Do not block printing if QBox lookup is unavailable.
+      console.warn('[cad] Unable to resolve QBox character name for infringement signature:', err?.message || err);
+    }
+
+    try {
+      const license = DriverLicenses.findByCitizenId(linkedCitizenId);
+      const fullName = String(license?.full_name || '').trim();
+      if (fullName) return fullName;
+    } catch {
+      // Ignore and continue to fallbacks.
+    }
+  }
+
+  return String(activeLink?.player_name || '').trim()
+    || String(unit?.user_name || '').trim()
+    || String(req?.user?.steam_name || '').trim();
 }
 
 router.get('/', requireAuth, (req, res) => {
@@ -313,6 +346,7 @@ router.post('/:id/print', requireAuth, async (req, res) => {
 
   const priorPrintCount = Math.max(0, Number(notice.print_count || 0));
   const printAction = priorPrintCount > 0 ? 'reprint' : 'print';
+  const officerSignatureName = await resolveOfficerSignatureName(req, unit);
   const metadata = {
     source: 'infringement_notice',
     infringement_notice_id: Number(notice.id || 0),
@@ -330,9 +364,8 @@ router.post('/:id/print', requireAuth, async (req, res) => {
     court_location: String(notice.court_location || '').trim(),
     officer_name: String(notice.officer_name || '').trim() || String(unit.user_name || req.user?.steam_name || '').trim(),
     officer_callsign: String(notice.officer_callsign || '').trim() || String(unit.callsign || '').trim(),
-    officer_signature_name: String(req.fivemLink?.player_name || '').trim()
-      || String(unit.user_name || '').trim()
-      || String(req.user?.steam_name || '').trim(),
+    officer_character_name: String(officerSignatureName || '').trim(),
+    officer_signature_name: String(officerSignatureName || '').trim(),
     issued_at: String(notice.created_at || '').trim(),
     print_action: printAction,
     details: notice.details || {},

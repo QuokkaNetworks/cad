@@ -107,6 +107,19 @@ if (-not $SkipBuild) {
   Ensure-NpmBuild -ProjectPath $finesVicSource -ProjectLabel 'npwd_fines_victoria'
 }
 
+# Keep cad_bridge-hosted legacy NPWD remotes in sync with the standalone app builds.
+$legacyVicRoadsDist = Join-Path $cadBridgeSource 'web\dist'
+$legacyFinesVicDist = Join-Path $cadBridgeSource 'web\finesvic-dist'
+$vicroadsDist = Join-Path $vicroadsSource 'web\dist'
+$finesVicDist = Join-Path $finesVicSource 'web\dist'
+
+if (Test-Path -LiteralPath $vicroadsDist) {
+  Sync-Directory -Source $vicroadsDist -Destination $legacyVicRoadsDist
+}
+if (Test-Path -LiteralPath $finesVicDist) {
+  Sync-Directory -Source $finesVicDist -Destination $legacyFinesVicDist
+}
+
 if (Test-Path -LiteralPath $outputRoot) {
   Write-Host "==> Removing existing output: $outputRoot" -ForegroundColor Yellow
   Remove-Item -LiteralPath $outputRoot -Recurse -Force
