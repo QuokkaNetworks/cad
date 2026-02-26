@@ -59,6 +59,25 @@ export const GTA_POSTAL_MAP_IMAGE_NUDGE = {
   y: -148,
 };
 
+// Flamm64 GTA-V-World-Map in-game coordinate conversion constants (Google custom map version).
+// Ref: https://github.com/Flamm64/GTA-V-World-Map (gtamp2googlepx in index.html)
+export const FLAMM_GTAV_WORLD_MAP_CALIBRATION = {
+  mx: 0.05030,
+  my: -0.05030,
+  offsetX: -486.97,
+  offsetY: 408.9,
+  mapDivWidth: 1126.69,
+  mapDivHeight: 600,
+  referenceZoom: 2, // Google custom map zoom used in the original conversion helper
+  targetZoom: 5, // we stitch z5 tiles into a single 8192x8192 image
+  referencePlanePx: 1024, // 256 * (2 ** 2)
+};
+
+export const FLAMM_GTAV_WORLD_MAP_IMAGE_SIZE = {
+  width: 8192,
+  height: 8192,
+};
+
 function clamp01(value) {
   if (!Number.isFinite(value)) return 0;
   if (value <= 0) return 0;
@@ -182,6 +201,94 @@ export function createGtaLeafletReferenceProjection({
       const d = Math.max(0, Number(distance || 0));
       const sx = Math.abs(scaleX) * zoomScale * (imageWorldWidth / referencePlanePx);
       const sy = Math.abs(scaleY) * zoomScale * (imageWorldHeight / referencePlanePx);
+      return Math.max(1, d * Math.min(sx, sy));
+    },
+  };
+}
+
+export function createFlammGtaWorldMapProjection({
+  imageSize = FLAMM_GTAV_WORLD_MAP_IMAGE_SIZE,
+  imageRect = null,
+  calibration = FLAMM_GTAV_WORLD_MAP_CALIBRATION,
+  worldBounds = GTA_DEFAULT_WORLD_BOUNDS,
+} = {}) {
+  const {
+    imageMinX,
+    imageMinY,
+    imageWorldWidth,
+    imageWorldHeight,
+  } = normalizeImageRect(imageSize, imageRect);
+
+  const mx = Number(calibration?.mx || 0.05030);
+  const my = Number(calibration?.my || -0.05030);
+  const offsetX = Number(calibration?.offsetX || -486.97);
+  const offsetY = Number(calibration?.offsetY || 408.9);
+  const mapDivWidth = Number(calibration?.mapDivWidth || 1126.69);
+  const mapDivHeight = Number(calibration?.mapDivHeight || 600);
+  const referencePlanePx = Math.max(1, Number(calibration?.referencePlanePx) || 1024);
+  const referenceZoom = Number.isFinite(Number(calibration?.referenceZoom)) ? Number(calibration.referenceZoom) : 2;
+  const targetZoom = Number.isFinite(Number(calibration?.targetZoom)) ? Number(calibration.targetZoom) : 5;
+  const zoomScale = Math.pow(2, targetZoom - referenceZoom);
+  const targetPlanePx = referencePlanePx * zoomScale;
+
+  // Original helper converts in-game coords to container pixels with the map centered at [0,0]
+  // on a fixed-size Google map. Convert those container pixels into the underlying world-pixel
+  // plane, then scale into the stitched z5 image plane.
+  const referenceCenterPx = referencePlanePx / 2;
+  const refPixelOffsetX = offsetX + (referenceCenterPx - (mapDivWidth / 2));
+  const refPixelOffsetY = offsetY + (referenceCenterPx - (mapDivHeight / 2));
+  const xWrapPeriodWorldUnits = Math.abs(referencePlanePx / (mx || 1));
+  const minX = Number(worldBounds?.minX || 0);
+  const maxX = Number(worldBounds?.maxX || 0);
+  const minY = Number(worldBounds?.minY || 0);
+  const maxY = Number(worldBounds?.maxY || 0);
+
+  function wrapRefX(refX) {
+    if (!Number.isFinite(refX)) return 0;
+    const wrapped = ((refX % referencePlanePx) + referencePlanePx) % referencePlanePx;
+    return wrapped;
+  }
+
+  function unwrapWorldX(worldX) {
+    if (!Number.isFinite(worldX) || !Number.isFinite(xWrapPeriodWorldUnits) || xWrapPeriodWorldUnits <= 0) return worldX;
+    let x = worldX;
+    // Bring cursor conversions back into the playable GTA/FiveM range.
+    while (x < minX) x += xWrapPeriodWorldUnits;
+    while (x > maxX) x -= xWrapPeriodWorldUnits;
+    return x;
+  }
+
+  return {
+    worldToImagePoint(point) {
+      const x = Number(point?.x);
+      const y = Number(point?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return { x: 0, y: 0 };
+      const refX = wrapRefX((mx * x) + refPixelOffsetX);
+      const refY = (my * y) + refPixelOffsetY;
+      return {
+        x: imageMinX + ((refX * zoomScale) / targetPlanePx) * imageWorldWidth,
+        y: imageMinY + ((refY * zoomScale) / targetPlanePx) * imageWorldHeight,
+      };
+    },
+
+    imageToWorldPoint(point) {
+      const x = Number(point?.x);
+      const y = Number(point?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return { x: 0, y: 0 };
+      const refXWrapped = ((x - imageMinX) / imageWorldWidth) * targetPlanePx / zoomScale;
+      const refY = ((y - imageMinY) / imageWorldHeight) * targetPlanePx / zoomScale;
+      const worldXWrapped = (refXWrapped - refPixelOffsetX) / (mx || 1);
+      const worldY = (refY - refPixelOffsetY) / (my || -0.05030);
+      return {
+        x: unwrapWorldX(worldXWrapped),
+        y: Number.isFinite(worldY) ? Math.min(maxY, Math.max(minY, worldY)) : 0,
+      };
+    },
+
+    worldDistanceToImagePixels(distance) {
+      const d = Math.max(0, Number(distance || 0));
+      const sx = Math.abs(mx) * zoomScale * (imageWorldWidth / targetPlanePx);
+      const sy = Math.abs(my) * zoomScale * (imageWorldHeight / targetPlanePx);
       return Math.max(1, d * Math.min(sx, sy));
     },
   };

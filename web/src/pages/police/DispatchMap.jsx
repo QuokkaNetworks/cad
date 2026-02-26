@@ -5,28 +5,33 @@ import './DispatchMap.css';
 import { api } from '../../api/client';
 import { useDepartment } from '../../context/DepartmentContext';
 import { useEventSource } from '../../hooks/useEventSource';
+import newPostals from '../../data/new-postals.json';
 import {
-  GTA_MAP_ATLAS_TILE_PX,
   GTA_DEFAULT_WORLD_BOUNDS as WORLD_BOUNDS,
-  GTA_FULL_MAP_IMAGE_SIZE as MAP_IMAGE_SIZE,
-  GTA_FULL_MAP_CONTENT_BOUNDS as MAP_IMAGE_CONTENT_BOUNDS,
-  createGtaLeafletReferenceProjection,
+  FLAMM_GTAV_WORLD_MAP_IMAGE_SIZE as MAP_IMAGE_SIZE,
+  createFlammGtaWorldMapProjection,
   getRectSize,
-  isGtaAtlasCanvasSize,
   isPointInsideRect,
 } from '../../utils/gtaMapProjection';
 
-const MAP_IMAGE_SRC = `${import.meta.env.BASE_URL || '/'}maps/FullMap.png`;
+const MAP_IMAGE_SRC = `${import.meta.env.BASE_URL || '/'}maps/GtaAtlasFlammZ5.jpg`;
+const MAP_IMAGE_CONTENT_BOUNDS = {
+  // Approximate active world area based on projected `new-postals` coverage with margin.
+  left: 1550,
+  top: 1350,
+  right: 6350,
+  bottom: 7300,
+};
+const MAP_MAJOR_GRID_PX = 1024;
 const MAP_SUBGRID_WORLD_STEP = 1500;
 const MAP_FIT_PADDING_PX = [16, 16];
 const MAP_WHOLE_PADDING_PX = [8, 8];
 const LEAFLET_DEFAULT_MIN_ZOOM = -2;
 const LEAFLET_MAX_ZOOM = 4.5;
-const MAP_PROJECTION = createGtaLeafletReferenceProjection({
+const MAP_PROJECTION = createFlammGtaWorldMapProjection({
   imageSize: MAP_IMAGE_SIZE,
   imageRect: MAP_IMAGE_CONTENT_BOUNDS,
 });
-const MAP_CANVAS_IS_STANDARD_ATLAS = isGtaAtlasCanvasSize(MAP_IMAGE_SIZE);
 const MAP_CONTENT_SIZE = getRectSize(MAP_IMAGE_CONTENT_BOUNDS);
 const MAP_CONTENT_COVERAGE_PCT = Math.round((MAP_CONTENT_SIZE.width / MAP_IMAGE_SIZE.width) * 1000) / 10;
 const MAP_ATLAS_RECT = { x: 0, y: 0, width: MAP_IMAGE_SIZE.width, height: MAP_IMAGE_SIZE.height };
@@ -131,6 +136,24 @@ function distanceMetres(a, b) {
   return Math.sqrt((dx * dx) + (dy * dy));
 }
 
+function findNearestPostal(world, postals) {
+  if (!world || !Array.isArray(postals) || postals.length === 0) return null;
+  let best = null;
+  let bestDistSq = Infinity;
+  for (const postal of postals) {
+    const dx = Number(world.x) - Number(postal.x);
+    const dy = Number(world.y) - Number(postal.y);
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) continue;
+    const distSq = (dx * dx) + (dy * dy);
+    if (distSq < bestDistSq) {
+      bestDistSq = distSq;
+      best = postal;
+    }
+  }
+  if (!best) return null;
+  return { ...best, distance: Math.sqrt(bestDistSq) };
+}
+
 function shapeIsPolygon(zone) {
   return String(zone?.shape || '').trim().toLowerCase() === 'polygon';
 }
@@ -156,12 +179,12 @@ function drawCalibrationGrid(group) {
   }).addTo(group);
 
   // Draw atlas tile boundaries in image space so they stay correct regardless of world bounds.
-  for (let xPx = GTA_MAP_ATLAS_TILE_PX; xPx < MAP_IMAGE_SIZE.width; xPx += GTA_MAP_ATLAS_TILE_PX) {
+  for (let xPx = MAP_MAJOR_GRID_PX; xPx < MAP_IMAGE_SIZE.width; xPx += MAP_MAJOR_GRID_PX) {
     L.polyline([imagePointToLatLng({ x: xPx, y: 0 }), imagePointToLatLng({ x: xPx, y: MAP_IMAGE_SIZE.height })], {
       pane: 'dispatchGridPane', color: 'rgba(96,165,250,0.42)', weight: 1.2, interactive: false,
     }).addTo(group);
   }
-  for (let yPx = GTA_MAP_ATLAS_TILE_PX; yPx < MAP_IMAGE_SIZE.height; yPx += GTA_MAP_ATLAS_TILE_PX) {
+  for (let yPx = MAP_MAJOR_GRID_PX; yPx < MAP_IMAGE_SIZE.height; yPx += MAP_MAJOR_GRID_PX) {
     L.polyline([imagePointToLatLng({ x: 0, y: yPx }), imagePointToLatLng({ x: MAP_IMAGE_SIZE.width, y: yPx })], {
       pane: 'dispatchGridPane', color: 'rgba(96,165,250,0.42)', weight: 1.2, interactive: false,
     }).addTo(group);
@@ -211,6 +234,7 @@ export default function DispatchMap() {
     grid: true,
     zones: true,
     labels: true,
+    postals: true,
   });
 
   const mapContainerRef = useRef(null);
@@ -284,6 +308,16 @@ export default function DispatchMap() {
     return rows.filter(Boolean).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   }, [visibleDepartments]);
 
+  const postalPoints = useMemo(() => (Array.isArray(newPostals) ? newPostals : [])
+    .map((row) => {
+      const code = String(row?.code || '').trim();
+      const x = parseNum(row?.x);
+      const y = parseNum(row?.y);
+      if (!code || x === null || y === null) return null;
+      return { code, x, y };
+    })
+    .filter(Boolean), []);
+
   const filteredUnits = useMemo(() => {
     const target = Number(departmentFilter || 0);
     return (Array.isArray(units) ? units : []).filter((u) => {
@@ -342,6 +376,10 @@ export default function DispatchMap() {
     () => unitMarkers.find((u) => Number(u.id) === Number(selectedUnitId)) || null,
     [unitMarkers, selectedUnitId],
   );
+  const cursorNearestPostal = useMemo(
+    () => findNearestPostal(cursorWorld, postalPoints),
+    [cursorWorld, postalPoints],
+  );
 
   useEffect(() => {
     if (selectedCallId && !filteredCalls.some((c) => Number(c.id) === Number(selectedCallId))) setSelectedCallId(null);
@@ -390,6 +428,8 @@ export default function DispatchMap() {
       map.getPane('dispatchGridPane').style.zIndex = '430';
       map.createPane('dispatchZonePane');
       map.getPane('dispatchZonePane').style.zIndex = '440';
+      map.createPane('dispatchPostalPane');
+      map.getPane('dispatchPostalPane').style.zIndex = '450';
       map.createPane('dispatchMarkerPane');
       map.getPane('dispatchMarkerPane').style.zIndex = '470';
 
@@ -423,6 +463,7 @@ export default function DispatchMap() {
       groups = {
         grid: L.layerGroup().addTo(map),
         zones: L.layerGroup().addTo(map),
+        postals: L.layerGroup().addTo(map),
         calls: L.layerGroup().addTo(map),
         units: L.layerGroup().addTo(map),
         highlights: L.layerGroup().addTo(map),
@@ -551,6 +592,21 @@ export default function DispatchMap() {
       });
     }
 
+    if (layerVisibility.postals) {
+      postalPoints.forEach((postal) => {
+        L.marker(worldToLatLng(postal.x, postal.y), {
+          pane: 'dispatchPostalPane',
+          interactive: false,
+          keyboard: false,
+          icon: L.divIcon({
+            className: 'dispatch-avl-label-icon dispatch-avl-label-icon--postal',
+            html: `<span>${postal.code}</span>`,
+            iconSize: null,
+          }),
+        }).addTo(groups.postals);
+      });
+    }
+
     callMarkers.forEach((call) => {
       const selected = Number(call.id) === Number(selectedCallId);
       const marker = L.circleMarker(call.__latlng, {
@@ -594,7 +650,7 @@ export default function DispatchMap() {
         }).addTo(groups.highlights);
       }
     });
-  }, [callMarkers, filteredZones, layerVisibility, selectedCallId, selectedUnitId, unitMarkers]);
+  }, [callMarkers, filteredZones, layerVisibility, mapUi.zoom, postalPoints, selectedCallId, selectedUnitId, unitMarkers]);
 
   const toggleLayer = (key) => setLayerVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
   const fitAtlasView = () => {
@@ -619,7 +675,7 @@ export default function DispatchMap() {
   };
 
   const contentBoundsText = `${Math.round(MAP_IMAGE_CONTENT_BOUNDS.left)},${Math.round(MAP_IMAGE_CONTENT_BOUNDS.top)} ${Math.round(MAP_CONTENT_SIZE.width)}x${Math.round(MAP_CONTENT_SIZE.height)}`;
-  const atlasCanvasText = `${MAP_IMAGE_SIZE.width}x${MAP_IMAGE_SIZE.height} (${Math.round(MAP_IMAGE_SIZE.width / GTA_MAP_ATLAS_TILE_PX)}x${Math.round(MAP_IMAGE_SIZE.height / GTA_MAP_ATLAS_TILE_PX)} tiles @ ${GTA_MAP_ATLAS_TILE_PX}px)`;
+  const atlasCanvasText = `${MAP_IMAGE_SIZE.width}x${MAP_IMAGE_SIZE.height} (Flamm z5 stitched atlas)`;
   const unmappedCallsCount = Math.max(0, filteredCalls.length - callMarkers.length);
 
   return (
@@ -630,7 +686,7 @@ export default function DispatchMap() {
             <div className="text-xs uppercase tracking-wide text-cad-muted">Dispatch Operations</div>
             <h1 className="text-xl font-bold mt-1">AVL Map</h1>
             <p className="text-xs sm:text-sm text-cad-muted mt-1.5 max-w-3xl">
-              Rebuilt AVL map using a direct GTA/FiveM 2x3 tile atlas projection (no affine/manual warp calibration).
+              Rebuilt AVL map using a stitched GTA atlas base map with `new-postals` overlay and nearest-postal lookup.
               {isDispatch ? '' : ' This view is primarily intended for dispatch centres.'}
             </p>
           </div>
@@ -680,7 +736,7 @@ export default function DispatchMap() {
             <div>
               <div className="font-semibold">Dispatch Area Map</div>
               <div className="text-[11px] text-cad-muted mt-0.5">
-                Postal map projection rebuilt using a proven GTA V Leaflet CRS transform adapted to `FullMap.png`
+                Existing GTA atlas map solution with `nearest-postal` `new-postals.json` labels and nearest lookup
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -697,6 +753,7 @@ export default function DispatchMap() {
                   ['basemap', 'Map'],
                   ['grid', 'Grid'],
                   ['zones', 'Zones'],
+                  ['postals', 'Postals'],
                   ['labels', 'Labels'],
                 ].map(([key, label]) => (
                   <button
@@ -718,12 +775,11 @@ export default function DispatchMap() {
                 <span className="inline-flex items-center rounded-md border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-cad-muted">
                   Alpha bounds {contentBoundsText}
                 </span>
-                <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] ${
-                  MAP_CANVAS_IS_STANDARD_ATLAS
-                    ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100'
-                    : 'border-amber-400/25 bg-amber-400/10 text-amber-100'
-                }`}>
+                <span className="inline-flex items-center rounded-md border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-100">
                   Canvas {atlasCanvasText}
+                </span>
+                <span className="inline-flex items-center rounded-md border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-[11px] text-sky-100">
+                  New Postals {postalPoints.length}
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -751,6 +807,9 @@ export default function DispatchMap() {
                     <div className="space-y-0.5">
                       <div className="text-slate-100">World X {Math.round(cursorWorld.x)} | Y {Math.round(cursorWorld.y)}</div>
                       <div className="text-cyan-100/90">Image PX X {Math.round(cursorMapCoords?.x || 0)} | Y {Math.round(cursorMapCoords?.y || 0)}</div>
+                      {cursorNearestPostal ? (
+                        <div className="text-emerald-100/90">Nearest Postal {cursorNearestPostal.code} ({Math.round(cursorNearestPostal.distance)}u)</div>
+                      ) : null}
                     </div>
                   ) : (
                     <span className="text-cad-muted">Cursor outside visible map content (transparent canvas padding)</span>
@@ -792,7 +851,7 @@ export default function DispatchMap() {
                         <div className="mt-1 text-xs sm:text-sm">{mapInitError || mapImageError}</div>
                       ) : (
                         <div className="mt-1 text-xs sm:text-sm text-slate-300">
-                          Initialising Leaflet and loading `FullMap.png`
+                          Initialising Leaflet and loading `GtaAtlasFlammZ5.jpg`
                         </div>
                       )}
                     </div>

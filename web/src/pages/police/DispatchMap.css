@@ -94,6 +94,13 @@
   font-size: 11px;
 }
 
+.dispatch-avl-label-icon--postal span {
+  color: #dbeafe;
+  font-size: 10px;
+  font-weight: 800;
+  opacity: 0.92;
+}
+
 .dispatch-avl-leaflet .leaflet-tooltip.dispatch-avl-tooltip {
   background: rgba(2, 6, 23, 0.8);
   border: 1px solid rgba(148, 163, 184, 0.2);
