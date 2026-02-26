@@ -1,10 +1,10 @@
-function buildDefaultLiveMapUrl() {
-  if (typeof window === 'undefined') return 'http://127.0.0.1:30121/map/';
+import { useEffect, useRef } from 'react';
 
+function buildDefaultLiveMapUrl() {
+  const host = String(import.meta.env.VITE_LIVEMAP_HOST || '103.203.241.35').trim() || '103.203.241.35';
   const port = String(import.meta.env.VITE_LIVEMAP_PORT || '30121').trim() || '30121';
-  const { hostname, protocol } = window.location;
-  const nextProtocol = protocol === 'https:' ? 'https:' : 'http:';
-  return `${nextProtocol}//${hostname}:${port}/map/`;
+  const protocol = String(import.meta.env.VITE_LIVEMAP_PROTOCOL || 'http').trim().replace(/:$/, '') || 'http';
+  return `${protocol}://${host}:${port}/map/`;
 }
 
 function resolveLiveMapUrl() {
@@ -22,33 +22,62 @@ function resolveLiveMapUrl() {
 
 export default function MapPage() {
   const liveMapUrl = resolveLiveMapUrl();
+  const autoOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (autoOpenedRef.current) return;
+    autoOpenedRef.current = true;
+    try {
+      window.open(liveMapUrl, '_blank', 'noopener,noreferrer');
+    } catch {
+      // Ignore popup blocker errors; manual button remains available.
+    }
+  }, [liveMapUrl]);
 
   return (
-    <div className="-m-6 flex min-h-[calc(100vh-52px)] flex-col bg-cad-bg">
-      <div className="flex items-center justify-between gap-3 border-b border-cad-border bg-cad-surface/80 px-4 py-2 backdrop-blur">
-        <div>
-          <h1 className="text-sm font-semibold text-cad-ink">Live Map</h1>
-          <p className="text-xs text-cad-muted">
-            Source: <span className="font-mono">{liveMapUrl}</span>
+    <div className="-m-6 flex min-h-[calc(100vh-52px)] items-start justify-center bg-cad-bg p-6">
+      <div className="w-full max-w-3xl rounded-xl border border-cad-border bg-cad-surface shadow-xl">
+        <div className="border-b border-cad-border px-4 py-3">
+          <h1 className="text-sm font-semibold text-cad-ink">Live Map (Standalone)</h1>
+          <p className="mt-1 text-xs text-cad-muted">
+            The livemap is opening in a separate tab for now.
           </p>
         </div>
-        <a
-          href={liveMapUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center rounded border border-cad-border bg-cad-card px-3 py-1.5 text-xs text-cad-muted hover:text-cad-ink"
-        >
-          Open Standalone
-        </a>
-      </div>
 
-      <div className="flex-1 bg-cad-card">
-        <iframe
-          title="Quokka Live Map"
-          src={liveMapUrl}
-          className="h-full w-full border-0"
-          referrerPolicy="no-referrer"
-        />
+        <div className="space-y-4 px-4 py-4">
+          <div className="rounded-lg border border-cad-border bg-cad-card px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wider text-cad-muted">Source</p>
+            <p className="mt-1 break-all font-mono text-xs text-cad-ink">{liveMapUrl}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={liveMapUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center rounded border border-cad-border bg-cad-card px-3 py-2 text-xs text-cad-muted hover:text-cad-ink"
+            >
+              Open Live Map
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  window.open(liveMapUrl, '_blank', 'noopener,noreferrer');
+                } catch {
+                  // Ignore popup blocker errors.
+                }
+              }}
+              className="inline-flex items-center rounded border border-cad-border bg-cad-surface px-3 py-2 text-xs text-cad-muted hover:text-cad-ink"
+            >
+              Try Open Again
+            </button>
+          </div>
+
+          <p className="text-xs text-cad-muted">
+            Embedded mode is disabled for now because the livemap is running on a separate non-HTTPS endpoint.
+          </p>
+        </div>
       </div>
     </div>
   );
