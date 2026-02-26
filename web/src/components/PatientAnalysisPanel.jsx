@@ -64,6 +64,32 @@ const PROTOCOL_PATHWAY_OPTIONS = [
 const MED_ROUTE_OPTIONS = [
   '', 'PO', 'SL', 'INH', 'NEB', 'IM', 'IV', 'IO', 'SC', 'TOPICAL', 'PR',
 ];
+const WASABI_PATIENT_STATE_OPTIONS = [
+  { value: '', label: 'Not set' },
+  { value: 'stable', label: 'Stable / Conscious' },
+  { value: 'injured', label: 'Injured' },
+  { value: 'downed', label: 'Downed / Unconscious' },
+  { value: 'laststand', label: 'Laststand' },
+  { value: 'dead', label: 'Deceased' },
+];
+const WASABI_BLEEDING_STATE_OPTIONS = [
+  { value: '', label: 'Not set' },
+  { value: 'none', label: 'No bleeding' },
+  { value: 'minor', label: 'Minor bleeding' },
+  { value: 'moderate', label: 'Moderate bleeding' },
+  { value: 'heavy', label: 'Heavy bleeding' },
+  { value: 'controlled', label: 'Bleeding controlled' },
+];
+const WASABI_TREATMENT_PRESETS = [
+  { label: 'Bandage', category: 'treatment', name: 'Bandage applied', route: 'TOPICAL', status: 'completed' },
+  { label: 'Bleed Control', category: 'procedure', name: 'Bleeding control', route: '', status: 'completed' },
+  { label: 'Pain Relief', category: 'medication', name: 'Pain relief', route: 'IM', status: 'completed' },
+  { label: 'CPR', category: 'procedure', name: 'CPR started', route: '', status: 'in_progress' },
+  { label: 'Defib', category: 'procedure', name: 'Defibrillation', route: '', status: 'completed' },
+  { label: 'Revive', category: 'procedure', name: 'Revive / advanced intervention', route: '', status: 'completed' },
+  { label: 'Stretcher', category: 'transport', name: 'Loaded to stretcher', route: '', status: 'completed' },
+  { label: 'Transport Prep', category: 'transport', name: 'Prepared for transport', route: '', status: 'completed' },
+];
 const HOSPITAL_BOARD_STATUS_OPTIONS = [
   { value: 'open', label: 'Open' },
   { value: 'capacity_pressure', label: 'Capacity Pressure' },
@@ -93,6 +119,9 @@ function buildDefaultDraft(person) {
       breathing_state: 'normal',
       circulation_state: 'stable',
       mobility_state: '',
+      wasabi_patient_state: '',
+      bleeding_state: '',
+      suspected_injuries: '',
       allergies: '',
       medications: '',
       treatment_given: '',
@@ -307,7 +336,7 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
   const showVitalsSection = !isTransportMode;
   const showMciSection = !isTransportMode;
   const showSecondaryQuestionsSection = !isTransportMode;
-  const showBodyDiagramTools = !isTransportMode;
+  const showBodyDiagramTools = false;
   const [history, setHistory] = useState([]);
   const [selectedAnalysisId, setSelectedAnalysisId] = useState(null);
   const [draft, setDraft] = useState(() => buildDefaultDraft(person));
@@ -315,9 +344,6 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [activeBodyView, setActiveBodyView] = useState('front');
-  const [markType, setMarkType] = useState('pain');
-  const [markSeverity, setMarkSeverity] = useState('moderate');
   const [hospitalBoard, setHospitalBoard] = useState([]);
   const [hospitalBoardLoading, setHospitalBoardLoading] = useState(false);
   const [hospitalBoardSavingId, setHospitalBoardSavingId] = useState('');
@@ -404,28 +430,6 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
     }));
   }
 
-  function addBodyMark(mark) {
-    setDraft((current) => ({
-      ...current,
-      body_marks: [
-        ...(Array.isArray(current.body_marks) ? current.body_marks : []),
-        {
-          id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          ...mark,
-        },
-      ],
-    }));
-  }
-
-  function removeBodyMark(id) {
-    setDraft((current) => ({
-      ...current,
-      body_marks: (Array.isArray(current.body_marks) ? current.body_marks : []).filter(
-        (mark) => String(mark?.id || '') !== String(id || '')
-      ),
-    }));
-  }
-
   function addTreatmentLogItem() {
     setDraft((current) => ({
       ...current,
@@ -443,6 +447,38 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
         },
       ],
     }));
+  }
+
+  function addTreatmentPreset(preset) {
+    const p = preset && typeof preset === 'object' ? preset : null;
+    if (!p) return;
+    setDraft((current) => {
+      const nextEntry = {
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        category: String(p.category || 'treatment'),
+        name: String(p.name || p.label || 'Treatment').trim(),
+        dose: String(p.dose || '').trim(),
+        route: String(p.route || '').trim(),
+        status: String(p.status || 'completed').trim(),
+        timestamp: new Date().toISOString(),
+        notes: String(p.notes || '').trim(),
+        indication: String(p.indication || '').trim(),
+        administered_by: String(p.administered_by || '').trim(),
+      };
+      const existingLog = Array.isArray(current.treatment_log) ? current.treatment_log : [];
+      const nextQuestionnaire = {
+        ...(current.questionnaire || {}),
+      };
+      const existingTreatmentText = String(nextQuestionnaire.treatment_given || '').trim();
+      nextQuestionnaire.treatment_given = existingTreatmentText
+        ? `${existingTreatmentText}\n- ${nextEntry.name}`
+        : `- ${nextEntry.name}`;
+      return {
+        ...current,
+        questionnaire: nextQuestionnaire,
+        treatment_log: [...existingLog, nextEntry],
+      };
+    });
   }
 
   function updateTreatmentLogItem(id, key, value) {
@@ -525,25 +561,29 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
       setDraft(toDraft(person, saved));
       if (isTransportMode) {
         setMessage(selectedAnalysisId ? 'Transport tracker updated.' : 'Transport tracker saved.');
+      } else if (isTreatmentMode) {
+        setMessage(selectedAnalysisId ? 'Treatment log updated.' : 'Treatment log saved.');
       } else {
         setMessage(selectedAnalysisId ? 'Patient analysis updated.' : 'Patient analysis saved.');
       }
     } catch (err) {
-      setError(err?.message || (isTransportMode ? 'Failed to save transport tracker' : 'Failed to save patient analysis'));
+      setError(err?.message || (isTransportMode ? 'Failed to save transport tracker' : (isTreatmentMode ? 'Failed to save treatment log' : 'Failed to save patient analysis')));
     } finally {
       setSaving(false);
     }
   }
 
   const treatmentLogCount = Array.isArray(draft.treatment_log) ? draft.treatment_log.length : 0;
+  const bodyMarkCount = Array.isArray(draft.body_marks) ? draft.body_marks.length : 0;
   const transportStatusText = String(draft.transport?.status || '').trim()
     ? formatStatusLabel(draft.transport?.status)
     : 'Not transporting';
   const saveButtonText = saving
-    ? (isTransportMode ? 'Saving Transport Update...' : 'Saving Analysis...')
+    ? (isTransportMode ? 'Saving Transport Update...' : (isTreatmentMode ? 'Saving Treatment Log...' : 'Saving Analysis...'))
       : (selectedAnalysisId
-      ? (isTransportMode ? 'Update Transport' : 'Update Analysis')
-      : (isTransportMode ? 'Save Transport Update' : 'Save Analysis'));
+      ? (isTransportMode ? 'Update Transport' : (isTreatmentMode ? 'Update Treatment Log' : 'Update Analysis'))
+      : (isTransportMode ? 'Save Transport Update' : (isTreatmentMode ? 'Save Treatment Log' : 'Save Analysis')));
+  const panelSaveLabel = isTransportMode ? 'Wasabi Transport Update' : 'Wasabi Patient Chart';
 
   const selectedHospitalBoardRow = useMemo(() => {
     const destination = String(draft.transport?.destination || '').trim().toLowerCase();
@@ -655,11 +695,31 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
         </div>
       )}
 
+      <div className="bg-cad-surface border border-cad-border rounded-lg px-4 py-3">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-cad-muted">
+              {isTransportMode ? 'Wasabi Ambulance Transport Workflow' : 'Wasabi Ambulance Treatment Workflow'}
+            </p>
+            <p className="text-sm text-cad-ink mt-1">
+              {isTransportMode
+                ? 'Use this page for destination status, handoff, refusals, and hospital board updates.'
+                : 'Use this page for live treatment logging, revive/CPR actions, and patient condition tracking during RP scenes.'}
+            </p>
+          </div>
+          <div className="text-xs text-cad-muted rounded border border-cad-border bg-cad-card px-3 py-2">
+            Body diagram removed. Use injury summary + treatment actions for Wasabi workflows.
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-4">
         <div className="space-y-4">
           {showPrimaryAssessmentSection && (
             <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
-              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Primary Assessment</h4>
+              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">
+                {isTreatmentMode ? 'Scene Assessment (Wasabi)' : 'Primary Assessment'}
+              </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs text-cad-muted mb-1">Triage Category</label>
@@ -694,6 +754,48 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
                   value={draft.chief_complaint}
                   onChange={(event) => setDraft((current) => ({ ...current, chief_complaint: event.target.value }))}
                   placeholder="Primary complaint / reason for attendance"
+                  className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-cad-muted mb-1">Wasabi Patient State</label>
+                  <select
+                    value={draft.questionnaire?.wasabi_patient_state || ''}
+                    onChange={(event) => updateQuestionnaire('wasabi_patient_state', event.target.value)}
+                    className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
+                  >
+                    {WASABI_PATIENT_STATE_OPTIONS.map((option) => (
+                      <option key={option.value || 'none'} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-cad-muted mb-1">Bleeding Status</label>
+                  <select
+                    value={draft.questionnaire?.bleeding_state || ''}
+                    onChange={(event) => updateQuestionnaire('bleeding_state', event.target.value)}
+                    className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
+                  >
+                    {WASABI_BLEEDING_STATE_OPTIONS.map((option) => (
+                      <option key={option.value || 'none'} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <input
+                  value={draft.questionnaire?.suspected_injuries || ''}
+                  onChange={(event) => updateQuestionnaire('suspected_injuries', event.target.value)}
+                  placeholder="Suspected injuries / hit zones (free text)"
+                  className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
+                />
+                <input
+                  value={draft.questionnaire?.mobility_state || ''}
+                  onChange={(event) => updateQuestionnaire('mobility_state', event.target.value)}
+                  placeholder="Mobility (walking / assisted / carried / stretcher)"
                   className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
                 />
               </div>
@@ -760,7 +862,9 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
 
           {showPrimaryAssessmentSection && (
             <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
-              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Protocol Pathway (PCR Guidance)</h4>
+              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">
+                {isTreatmentMode ? 'Treatment Pathway / RP Notes' : 'Protocol Pathway (PCR Guidance)'}
+              </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <select
                   value={draft.questionnaire?.protocol_pathway || ''}
@@ -797,14 +901,18 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
                 ))}
               </div>
               <p className="text-xs text-cad-muted">
-                Protocol guidance supports a structured patient care report workflow while allowing clinical discretion and free-text notes.
+                {isTreatmentMode
+                  ? 'Use these fields to mirror Wasabi ambulance scene workflow while keeping a clear RP treatment trail.'
+                  : 'Protocol guidance supports a structured patient care report workflow while allowing clinical discretion and free-text notes.'}
               </p>
             </div>
           )}
 
           {showVitalsSection && (
             <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
-              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Vitals</h4>
+              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">
+                {isTreatmentMode ? 'Vitals / Observations' : 'Vitals'}
+              </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <input value={draft.vitals?.pulse || ''} onChange={(e) => updateVitals('pulse', e.target.value)} placeholder="Pulse (bpm)" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
                 <input value={draft.vitals?.blood_pressure || ''} onChange={(e) => updateVitals('blood_pressure', e.target.value)} placeholder="Blood Pressure (mmHg)" className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
@@ -818,7 +926,7 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
 
           {isTransportMode && (
             <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
-              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Transport Handover Context</h4>
+              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Wasabi Transport Handover Context</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                 <div className="rounded border border-cad-border bg-cad-card px-3 py-2">
                   <p className="text-[11px] uppercase tracking-wider text-cad-muted">Chief Complaint</p>
@@ -838,7 +946,7 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
                 </div>
               </div>
               <p className="text-xs text-cad-muted">
-                Assessment, vitals, treatment entries, and MCI tagging are managed in the Treatment Log tab to avoid duplicate charting.
+                Assessment and treatment actions should be logged in the Treatment Log tab first, then handoff and destination updates are tracked here.
               </p>
             </div>
           )}
@@ -846,7 +954,9 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
           {showTreatmentLogSection && (
             <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Treatment Log</h4>
+                <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">
+                  {isTreatmentMode ? 'Wasabi Treatment Actions' : 'Treatment Log'}
+                </h4>
                 <button
                   type="button"
                   onClick={addTreatmentLogItem}
@@ -854,6 +964,21 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
                 >
                   + Add Entry
                 </button>
+              </div>
+              <div className="rounded-lg border border-cad-border bg-cad-card p-2">
+                <p className="text-[11px] uppercase tracking-wider text-cad-muted mb-2">Quick Actions</p>
+                <div className="flex flex-wrap gap-2">
+                  {WASABI_TREATMENT_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => addTreatmentPreset(preset)}
+                      className="px-2.5 py-1.5 text-xs rounded border border-cad-border bg-cad-surface text-cad-muted hover:text-cad-ink"
+                    >
+                      + {preset.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               {Array.isArray(draft.treatment_log) && draft.treatment_log.length > 0 ? (
                 <div className="space-y-2">
@@ -952,12 +1077,14 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
 
           {showTransportTrackerSection && (
             <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
-              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Transport Tracker</h4>
+              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">
+                {isTransportMode ? 'Wasabi Transport / Handover' : 'Transport Tracker'}
+              </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <input
                   value={draft.transport?.destination || ''}
                   onChange={(e) => updateTransportField('destination', e.target.value)}
-                  placeholder="Destination hospital"
+                  placeholder="Destination hospital / treatment center"
                   className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
                 />
                 <select
@@ -988,7 +1115,7 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
                 <input
                   value={draft.transport?.unit_callsign || ''}
                   onChange={(e) => updateTransportField('unit_callsign', e.target.value)}
-                  placeholder="Transport unit callsign"
+                  placeholder="Ambulance / EMS unit callsign"
                   className="bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
                 />
                 <input
@@ -1116,11 +1243,11 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
                   ))}
                 </div>
               </div>
-              <textarea
+                <textarea
                 value={draft.transport?.notes || ''}
                 onChange={(e) => updateTransportField('notes', e.target.value)}
                 rows={2}
-                placeholder="Transport notes / destination updates"
+                placeholder="Transport notes / handover updates / Wasabi status changes"
                 className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm resize-none"
               />
             </div>
@@ -1154,61 +1281,59 @@ export default function PatientAnalysisPanel({ person, activeDepartmentId, mode 
 
           {showSecondaryQuestionsSection && (
             <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
-              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Secondary Questions</h4>
-              <input value={draft.questionnaire?.mechanism || ''} onChange={(e) => updateQuestionnaire('mechanism', e.target.value)} placeholder="Mechanism of injury / illness" className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">
+                {isTreatmentMode ? 'Patient Notes / Background (Wasabi RP)' : 'Secondary Questions'}
+              </h4>
+              <input value={draft.questionnaire?.mechanism || ''} onChange={(e) => updateQuestionnaire('mechanism', e.target.value)} placeholder="Mechanism / scene summary (e.g. vehicle crash, fall, stabbing)" className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
               <input value={draft.questionnaire?.onset || ''} onChange={(e) => updateQuestionnaire('onset', e.target.value)} placeholder="Onset / timeline" className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
               <input value={draft.questionnaire?.allergies || ''} onChange={(e) => updateQuestionnaire('allergies', e.target.value)} placeholder="Allergies" className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
               <input value={draft.questionnaire?.medications || ''} onChange={(e) => updateQuestionnaire('medications', e.target.value)} placeholder="Current medications" className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
-              <textarea value={draft.questionnaire?.treatment_given || ''} onChange={(e) => updateQuestionnaire('treatment_given', e.target.value)} placeholder="Treatment provided" rows={3} className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
-              <textarea value={draft.notes} onChange={(e) => setDraft((current) => ({ ...current, notes: e.target.value }))} placeholder="Clinical notes..." rows={4} className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+              <textarea value={draft.questionnaire?.treatment_given || ''} onChange={(e) => updateQuestionnaire('treatment_given', e.target.value)} placeholder="Treatment summary (auto-updated by quick actions, can be edited)" rows={3} className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
+              <textarea value={draft.notes} onChange={(e) => setDraft((current) => ({ ...current, notes: e.target.value }))} placeholder="Additional notes / handoff / scene notes..." rows={4} className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm" />
             </div>
           )}
         </div>
 
         <div className="space-y-4">
-          {showBodyDiagramTools && (
-            <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-2">
-              <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Marker Tool</h4>
-              <div className="grid grid-cols-1 gap-2">
-                <select
-                  value={markType}
-                  onChange={(event) => setMarkType(event.target.value)}
-                  className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-                >
-                  {MARK_TYPES.map((type) => (
-                    <option key={type} value={type}>{formatStatusLabel(type)}</option>
-                  ))}
-                </select>
-                <select
-                  value={markSeverity}
-                  onChange={(event) => setMarkSeverity(event.target.value)}
-                  className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm"
-                >
-                  {MARK_SEVERITY.map((severity) => (
-                    <option key={severity} value={severity}>{formatStatusLabel(severity)}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setDraft((current) => ({ ...current, body_marks: [] }))}
-                  className="px-3 py-2 border border-cad-border rounded text-sm text-cad-muted hover:text-cad-ink hover:border-cad-border-light"
-                >
-                  Clear All Markers
-                </button>
+          {showTreatmentLogSection && (
+            <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-sm font-semibold text-cad-muted uppercase tracking-wider">Wasabi Scene Summary</h4>
+                <span className="text-xs text-cad-muted">{panelSaveLabel}</span>
+              </div>
+              <div className="grid grid-cols-1 gap-2 text-sm">
+                <div className="rounded border border-cad-border bg-cad-card px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wider text-cad-muted">Patient State</p>
+                  <p className="mt-1 text-cad-ink">{formatStatusLabel(draft.questionnaire?.wasabi_patient_state || 'not_set') || 'Not set'}</p>
+                </div>
+                <div className="rounded border border-cad-border bg-cad-card px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wider text-cad-muted">Bleeding</p>
+                  <p className="mt-1 text-cad-ink">{formatStatusLabel(draft.questionnaire?.bleeding_state || 'not_set') || 'Not set'}</p>
+                </div>
+                <div className="rounded border border-cad-border bg-cad-card px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wider text-cad-muted">Suspected Injuries</p>
+                  <p className="mt-1 text-cad-ink">{draft.questionnaire?.suspected_injuries || '-'}</p>
+                </div>
+                <div className="rounded border border-cad-border bg-cad-card px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wider text-cad-muted">Legacy Body Markers</p>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <p className="text-cad-ink">{bodyMarkCount}</p>
+                    {bodyMarkCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setDraft((current) => ({ ...current, body_marks: [] }))}
+                        className="px-2 py-1 text-[11px] rounded border border-cad-border text-cad-muted hover:text-cad-ink"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-cad-muted mt-1">
+                    Body diagram markers are disabled for the Wasabi workflow. Existing markers are preserved unless cleared.
+                  </p>
+                </div>
               </div>
             </div>
-          )}
-
-          {showBodyDiagramTools && (
-            <BodyDiagram
-              marks={draft.body_marks}
-              activeView={activeBodyView}
-              onChangeView={setActiveBodyView}
-              onAddMark={addBodyMark}
-              onRemoveMark={removeBodyMark}
-              markType={markType}
-              markSeverity={markSeverity}
-            />
           )}
 
           <div className="bg-cad-surface border border-cad-border rounded-lg p-3 space-y-2">

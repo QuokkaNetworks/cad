@@ -51,10 +51,10 @@ const EMPTY_FIRE_FORM = {
 };
 
 const MEDICAL_REPORT_TYPES = [
-  { value: 'assessment', label: 'Assessment' },
-  { value: 'treatment', label: 'Treatment' },
-  { value: 'transport', label: 'Transport' },
-  { value: 'release', label: 'Release' },
+  { value: 'assessment', label: 'On-Scene Assessment' },
+  { value: 'treatment', label: 'Treatment Update' },
+  { value: 'transport', label: 'Transport / Handover' },
+  { value: 'release', label: 'Refusal / Release' },
 ];
 
 const FIRE_INCIDENT_TYPES = [
@@ -211,14 +211,10 @@ function toggleBodyRegion(selected, key) {
 function BodyRegionSelector({ selected, onChange }) {
   return (
     <div className="bg-cad-surface border border-cad-border rounded-lg p-3">
-      <p className="text-xs text-cad-muted mb-2">Tap body areas to mark injuries</p>
-      <div className="relative mx-auto w-44 h-80 rounded-xl border border-cad-border/70 bg-cad-card overflow-hidden">
-        <div className="absolute left-1/2 top-3 -translate-x-1/2 w-8 h-8 rounded-full border border-cad-border bg-cad-surface" />
-        <div className="absolute left-1/2 top-12 -translate-x-1/2 w-10 h-14 rounded-lg border border-cad-border bg-cad-surface" />
-        <div className="absolute left-1/2 top-26 -translate-x-1/2 w-14 h-16 rounded-lg border border-cad-border bg-cad-surface" />
-        <div className="absolute left-[42%] top-42 w-4 h-20 rounded-lg border border-cad-border bg-cad-surface" />
-        <div className="absolute left-[54%] top-42 w-4 h-20 rounded-lg border border-cad-border bg-cad-surface" />
-
+      <p className="text-xs text-cad-muted mb-2">
+        Injury areas (Wasabi-friendly quick selector, no body diagram)
+      </p>
+      <div className="flex flex-wrap gap-2">
         {BODY_REGION_OPTIONS.map(region => {
           const active = selected.includes(region.key);
           return (
@@ -226,12 +222,11 @@ function BodyRegionSelector({ selected, onChange }) {
               key={region.key}
               type="button"
               onClick={() => onChange(toggleBodyRegion(selected, region.key))}
-              className={`absolute -translate-x-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[10px] border transition-colors ${
+              className={`px-2 py-1 rounded text-xs border transition-colors ${
                 active
                   ? 'bg-red-500/25 text-red-200 border-red-400/60'
-                  : 'bg-cad-bg/80 text-cad-muted border-cad-border hover:text-cad-ink'
+                  : 'bg-cad-card text-cad-muted border-cad-border hover:text-cad-ink'
               }`}
-              style={{ top: region.top, left: region.left }}
             >
               {region.label}
             </button>
@@ -245,6 +240,12 @@ function BodyRegionSelector({ selected, onChange }) {
 function MedicalFields({ form, setForm }) {
   return (
     <>
+      <div className="bg-cad-surface border border-cad-border rounded-lg px-3 py-2">
+        <p className="text-xs text-cad-muted uppercase tracking-wider">EMS Report Workflow</p>
+        <p className="text-sm text-cad-ink mt-1">
+          Wasabi Ambulance-friendly summary report. Use Treatment Log / Transport Tracker for live charting, then keep this report concise.
+        </p>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm text-cad-muted mb-1">Report Type</label>
@@ -272,13 +273,13 @@ function MedicalFields({ form, setForm }) {
         </div>
       </div>
       <div>
-        <label className="block text-sm text-cad-muted mb-1">Chief Complaint</label>
+        <label className="block text-sm text-cad-muted mb-1">Chief Complaint / Scene Reason</label>
         <input
           type="text"
           value={form.complaint}
           onChange={e => setForm(prev => ({ ...prev, complaint: e.target.value }))}
           className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm focus:outline-none focus:border-cad-accent"
-          placeholder="e.g. Chest pain, breathing difficulty"
+          placeholder="e.g. GSW, MVA, unconscious person, chest pain"
         />
       </div>
       <div>
@@ -297,27 +298,27 @@ function MedicalFields({ form, setForm }) {
         onChange={next => setForm(prev => ({ ...prev, body_regions: next }))}
       />
       <div>
-        <label className="block text-sm text-cad-muted mb-1">Treatment Provided</label>
+        <label className="block text-sm text-cad-muted mb-1">Treatment / Actions Taken</label>
         <input
           type="text"
           value={form.treatment}
           onChange={e => setForm(prev => ({ ...prev, treatment: e.target.value }))}
           className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm focus:outline-none focus:border-cad-accent"
-          placeholder="e.g. Oxygen, splinting, medication"
+          placeholder="e.g. Bandage, CPR, revive, oxygen, splinting, medication"
         />
       </div>
       <div>
-        <label className="block text-sm text-cad-muted mb-1">Transport Destination</label>
+        <label className="block text-sm text-cad-muted mb-1">Transport Destination / Outcome</label>
         <input
           type="text"
           value={form.transport_to}
           onChange={e => setForm(prev => ({ ...prev, transport_to: e.target.value }))}
           className="w-full bg-cad-card border border-cad-border rounded px-3 py-2 text-sm focus:outline-none focus:border-cad-accent"
-          placeholder="Hospital or clinic"
+          placeholder="Hospital name, treated on scene, refusal, morgue, etc."
         />
       </div>
       <div>
-        <label className="block text-sm text-cad-muted mb-1">Clinical Notes</label>
+        <label className="block text-sm text-cad-muted mb-1">Clinical / Handover Notes</label>
         <textarea
           value={form.notes}
           onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))}
@@ -642,7 +643,7 @@ export default function Records({ embeddedPerson = null, embeddedDepartmentId = 
         countNoun: 'report(s)',
       };
   const opsWorkflowHint = isParamedics
-    ? 'Search patient -> select patient -> create/update report. Keep entries short and operationally useful for RP handoff.'
+    ? 'Search patient -> chart live updates in Treatment/Transport -> create/update report summary. Optimized for Wasabi Ambulance RP handoff.'
     : isFire
       ? 'Search occupant/contact -> select person -> create/update incident report. Use incidents for live coordination, reports for final documentation.'
       : '';

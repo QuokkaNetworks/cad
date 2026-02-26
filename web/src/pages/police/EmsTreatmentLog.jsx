@@ -5,7 +5,7 @@ export default function EmsTreatmentLog() {
     <EmsPatientWorkflowPage
       mode="treatment"
       title="Treatment Log"
-      subtitle="Focused EMS workflow for documenting medications, procedures, and care interventions."
+      subtitle="Wasabi Ambulance-focused EMS workflow for scene treatment, revive/CPR actions, and patient condition charting."
     />
   );
 }

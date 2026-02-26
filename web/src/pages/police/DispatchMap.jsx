@@ -5,54 +5,29 @@ import './DispatchMap.css';
 import { api } from '../../api/client';
 import { useDepartment } from '../../context/DepartmentContext';
 import { useEventSource } from '../../hooks/useEventSource';
-
-const GTA_MAP_TILE_UNITS = 4500;
-const WORLD_BOUNDS = {
-  minX: -GTA_MAP_TILE_UNITS,
-  maxX: GTA_MAP_TILE_UNITS,
-  minY: -GTA_MAP_TILE_UNITS,
-  maxY: GTA_MAP_TILE_UNITS * 2,
-};
+import {
+  GTA_MAP_TILE_WORLD_UNITS as GTA_MAP_TILE_UNITS,
+  GTA_MAP_ATLAS_TILE_PX,
+  GTA_DEFAULT_WORLD_BOUNDS as WORLD_BOUNDS,
+  GTA_FULL_MAP_IMAGE_SIZE as MAP_IMAGE_SIZE,
+  GTA_FULL_MAP_CONTENT_BOUNDS as MAP_IMAGE_CONTENT_BOUNDS,
+  createGtaAtlasProjection,
+  getRectSize,
+  isGtaAtlasCanvasSize,
+  isPointInsideRect,
+} from '../../utils/gtaMapProjection';
 
 const MAP_IMAGE_SRC = `${import.meta.env.BASE_URL || '/'}maps/FullMap.png`;
-const MAP_IMAGE_SIZE = { width: 6144, height: 9216 };
-const MAP_ALPHA_CONTENT_BOUNDS = { left: 75, top: 348, right: 6131, bottom: 8576 };
-const MAP_ATLAS_RECT_NUDGE_PX = { x: 0, y: 0, width: 0, height: 0 };
 const MAP_SUBGRID_WORLD_STEP = 1500;
 const MAP_FIT_PADDING_PX = [16, 16];
 const MAP_WHOLE_PADDING_PX = [8, 8];
 const LEAFLET_DEFAULT_MIN_ZOOM = -2;
 const LEAFLET_MAX_ZOOM = 4.5;
-
-// Affine calibration maps the current/raw world solution (derived from the atlas rect)
-// to observed GTA world coordinates using landmark samples (MRPD, Pillbox, Sandy SO).
-// raw -> calibrated(actual)
-const WORLD_CAL_A = 0.6667353755004273;
-const WORLD_CAL_B = 0.06542524236688713;
-const WORLD_CAL_C = -0.4296981536163556;
-const WORLD_CAL_D = 1.0218909679548032;
-const WORLD_CAL_TX = 470.0854845253253;
-const WORLD_CAL_TY = -5.2163964132441265;
-// calibrated(actual) -> raw (inverse matrix), used before plotting unit/call markers
-const WORLD_CAL_INV_A = 1.4404111102320463;
-const WORLD_CAL_INV_B = -0.09222045105604326;
-const WORLD_CAL_INV_C = 0.6056830072135153;
-const WORLD_CAL_INV_D = 0.9397999126830787;
-const WORLD_CAL_INV_TX = -677.5974130992097;
-const WORLD_CAL_INV_TY = -279.8204210210343;
-// Additional control points can expose local non-linear distortion in the basemap image.
-// Apply a localized residual warp on top of the affine model so we can refine one area
-// without breaking previously-calibrated landmarks.
-const WORLD_CAL_CONTROL_POINTS = [
-  { raw: { x: 38, y: -944 }, actual: { x: 433.66, y: -986.21 } }, // MRPD
-  { raw: { x: -193, y: -648 }, actual: { x: 299.01, y: -584.47 } }, // Pillbox
-  { raw: { x: 1629, y: 4286 }, actual: { x: 1836.61, y: 3674.63 } }, // Sandy SO
-  { raw: { x: -304, y: -1149 }, actual: { x: -206.92, y: -1307.73 } }, // User sample (Davis/impound area)
-  { raw: { x: -220, y: -964 }, actual: { x: -78.13, y: -1032.24 } }, // User sample (Davis / south LS)
-  { raw: { x: 756, y: 1352 }, actual: { x: 718.98, y: 1205.19 } }, // User sample (north LS / hillside)
-];
-const WORLD_CAL_RESIDUAL_IDW_POWER = 2.2;
-const WORLD_CAL_RESIDUAL_FALLOFF_UNITS = 2200;
+const MAP_PROJECTION = createGtaAtlasProjection({ imageSize: MAP_IMAGE_SIZE, worldBounds: WORLD_BOUNDS });
+const MAP_CANVAS_IS_STANDARD_ATLAS = isGtaAtlasCanvasSize(MAP_IMAGE_SIZE);
+const MAP_CONTENT_SIZE = getRectSize(MAP_IMAGE_CONTENT_BOUNDS);
+const MAP_CONTENT_COVERAGE_PCT = Math.round((MAP_CONTENT_SIZE.width / MAP_IMAGE_SIZE.width) * 1000) / 10;
+const MAP_ATLAS_RECT = { x: 0, y: 0, width: MAP_IMAGE_SIZE.width, height: MAP_IMAGE_SIZE.height };
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -67,176 +42,30 @@ function round2(value) {
   return Math.round(Number(value || 0) * 100) / 100;
 }
 
-function fitAspectRectInsideBounds(bounds, aspectWidth, aspectHeight) {
-  const width = Math.max(0, Number(bounds.right) - Number(bounds.left));
-  const height = Math.max(0, Number(bounds.bottom) - Number(bounds.top));
-  const aspect = Number(aspectWidth) / Number(aspectHeight);
-  let nextWidth = width;
-  let nextHeight = nextWidth / aspect;
-  if (nextHeight > height) {
-    nextHeight = height;
-    nextWidth = nextHeight * aspect;
-  }
-  return {
-    x: Number(bounds.left) + ((width - nextWidth) / 2),
-    y: Number(bounds.top) + ((height - nextHeight) / 2),
-    width: nextWidth,
-    height: nextHeight,
-  };
-}
-
-function getAtlasRectPx() {
-  const base = fitAspectRectInsideBounds(MAP_ALPHA_CONTENT_BOUNDS, 2, 3);
-  return {
-    x: base.x + (Number(MAP_ATLAS_RECT_NUDGE_PX.x) || 0),
-    y: base.y + (Number(MAP_ATLAS_RECT_NUDGE_PX.y) || 0),
-    width: Math.max(1, base.width + (Number(MAP_ATLAS_RECT_NUDGE_PX.width) || 0)),
-    height: Math.max(1, base.height + (Number(MAP_ATLAS_RECT_NUDGE_PX.height) || 0)),
-  };
-}
-
-const MAP_ATLAS_RECT = getAtlasRectPx();
-
 function getImageBoundsLatLng() {
   return L.latLngBounds(L.latLng(0, 0), L.latLng(MAP_IMAGE_SIZE.height, MAP_IMAGE_SIZE.width));
 }
 
 function rectToLatLngBounds(rect) {
-  const topLeft = imagePointToLatLng({ x: rect.x, y: rect.y });
-  const bottomRight = imagePointToLatLng({ x: rect.x + rect.width, y: rect.y + rect.height });
+  const left = Number(rect?.left ?? rect?.x ?? 0);
+  const top = Number(rect?.top ?? rect?.y ?? 0);
+  const width = Number(rect?.width ?? (Number(rect?.right) - left) ?? 0);
+  const height = Number(rect?.height ?? (Number(rect?.bottom) - top) ?? 0);
+  const topLeft = imagePointToLatLng({ x: left, y: top });
+  const bottomRight = imagePointToLatLng({ x: left + width, y: top + height });
   return L.latLngBounds(bottomRight, topLeft);
 }
 
 function isImagePointInsideAtlas(point) {
-  if (!point) return false;
-  const x = Number(point.x);
-  const y = Number(point.y);
-  return Number.isFinite(x)
-    && Number.isFinite(y)
-    && x >= MAP_ATLAS_RECT.x
-    && x <= (MAP_ATLAS_RECT.x + MAP_ATLAS_RECT.width)
-    && y >= MAP_ATLAS_RECT.y
-    && y <= (MAP_ATLAS_RECT.y + MAP_ATLAS_RECT.height);
-}
-
-function applyWorldAffineCalibrationOnly(point) {
-  const x = Number(point?.x);
-  const y = Number(point?.y);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return { x: 0, y: 0 };
-  return {
-    x: (WORLD_CAL_A * x) + (WORLD_CAL_B * y) + WORLD_CAL_TX,
-    y: (WORLD_CAL_C * x) + (WORLD_CAL_D * y) + WORLD_CAL_TY,
-  };
-}
-
-function invertWorldAffineCalibrationOnly(point) {
-  const x = Number(point?.x);
-  const y = Number(point?.y);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return { x: 0, y: 0 };
-  return {
-    x: (WORLD_CAL_INV_A * x) + (WORLD_CAL_INV_B * y) + WORLD_CAL_INV_TX,
-    y: (WORLD_CAL_INV_C * x) + (WORLD_CAL_INV_D * y) + WORLD_CAL_INV_TY,
-  };
-}
-
-function sampleWorldCalibrationResidual(point, direction = 'raw_to_actual') {
-  const x = Number(point?.x);
-  const y = Number(point?.y);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return { x: 0, y: 0 };
-  if (!Array.isArray(WORLD_CAL_CONTROL_POINTS) || WORLD_CAL_CONTROL_POINTS.length === 0) return { x: 0, y: 0 };
-
-  let weightedDx = 0;
-  let weightedDy = 0;
-  let weightTotal = 0;
-  let nearestDistance = Infinity;
-
-  for (const cp of WORLD_CAL_CONTROL_POINTS) {
-    const source = direction === 'actual_to_raw' ? cp?.actual : cp?.raw;
-    const target = direction === 'actual_to_raw' ? cp?.raw : cp?.actual;
-    const sx = Number(source?.x);
-    const sy = Number(source?.y);
-    const tx = Number(target?.x);
-    const ty = Number(target?.y);
-    if (!Number.isFinite(sx) || !Number.isFinite(sy) || !Number.isFinite(tx) || !Number.isFinite(ty)) continue;
-
-    const baseTarget = direction === 'actual_to_raw'
-      ? invertWorldAffineCalibrationOnly(source)
-      : applyWorldAffineCalibrationOnly(source);
-    const dxResidual = tx - Number(baseTarget?.x || 0);
-    const dyResidual = ty - Number(baseTarget?.y || 0);
-
-    const dx = x - sx;
-    const dy = y - sy;
-    const distance = Math.hypot(dx, dy);
-    nearestDistance = Math.min(nearestDistance, distance);
-
-    if (distance < 0.0001) {
-      return { x: dxResidual, y: dyResidual };
-    }
-
-    const weight = 1 / Math.pow(Math.max(distance, 1), WORLD_CAL_RESIDUAL_IDW_POWER);
-    weightedDx += weight * dxResidual;
-    weightedDy += weight * dyResidual;
-    weightTotal += weight;
-  }
-
-  if (!Number.isFinite(weightTotal) || weightTotal <= 0) return { x: 0, y: 0 };
-
-  const avgDx = weightedDx / weightTotal;
-  const avgDy = weightedDy / weightTotal;
-  const radius = Math.max(1, Number(WORLD_CAL_RESIDUAL_FALLOFF_UNITS || 0) || 1);
-  const attenuation = 1 / (1 + Math.pow(Math.max(0, nearestDistance) / radius, 2.4));
-
-  return {
-    x: avgDx * attenuation,
-    y: avgDy * attenuation,
-  };
-}
-
-function applyWorldCalibration(point) {
-  const base = applyWorldAffineCalibrationOnly(point);
-  const residual = sampleWorldCalibrationResidual(point, 'raw_to_actual');
-  return {
-    x: base.x + residual.x,
-    y: base.y + residual.y,
-  };
-}
-
-function invertWorldCalibration(point) {
-  const base = invertWorldAffineCalibrationOnly(point);
-  const residual = sampleWorldCalibrationResidual(point, 'actual_to_raw');
-  return {
-    x: base.x + residual.x,
-    y: base.y + residual.y,
-  };
-}
-
-function rawWorldToImagePoint(x, y) {
-  const relX = (Number(x) - WORLD_BOUNDS.minX) / (WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX);
-  const relY = (Number(y) - WORLD_BOUNDS.minY) / (WORLD_BOUNDS.maxY - WORLD_BOUNDS.minY);
-  return {
-    x: MAP_ATLAS_RECT.x + (relX * MAP_ATLAS_RECT.width),
-    y: MAP_ATLAS_RECT.y + MAP_ATLAS_RECT.height - (relY * MAP_ATLAS_RECT.height),
-  };
-}
-
-function rawImageToWorldPoint(x, y) {
-  const relX = (Number(x) - MAP_ATLAS_RECT.x) / MAP_ATLAS_RECT.width;
-  const relY = (Number(y) - MAP_ATLAS_RECT.y) / MAP_ATLAS_RECT.height;
-  return {
-    x: WORLD_BOUNDS.minX + (relX * (WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX)),
-    y: WORLD_BOUNDS.minY + ((1 - relY) * (WORLD_BOUNDS.maxY - WORLD_BOUNDS.minY)),
-  };
+  return isPointInsideRect(point, MAP_IMAGE_CONTENT_BOUNDS);
 }
 
 function worldToImagePoint(x, y) {
-  const raw = invertWorldCalibration({ x, y });
-  return rawWorldToImagePoint(raw.x, raw.y);
+  return MAP_PROJECTION.worldToImagePoint({ x, y });
 }
 
 function imageToWorldPoint(x, y) {
-  const raw = rawImageToWorldPoint(x, y);
-  return applyWorldCalibration(raw);
+  return MAP_PROJECTION.imageToWorldPoint({ x, y });
 }
 
 function imagePointToLatLng(point) {
@@ -258,9 +87,7 @@ function latLngToImagePoint(latlng) {
 }
 
 function worldDistanceToImagePixels(distance) {
-  const sx = MAP_ATLAS_RECT.width / (WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX);
-  const sy = MAP_ATLAS_RECT.height / (WORLD_BOUNDS.maxY - WORLD_BOUNDS.minY);
-  return Math.max(1, Number(distance || 0) * Math.min(sx, sy));
+  return MAP_PROJECTION.worldDistanceToImagePixels(distance);
 }
 
 function statusColor(status) {
@@ -386,7 +213,7 @@ export default function DispatchMap() {
   const mapContainerRef = useRef(null);
   const leafletRef = useRef({ map: null, imageOverlay: null, groups: null, cleanupFns: [] });
 
-  const atlasBounds = useMemo(() => rectToLatLngBounds(MAP_ATLAS_RECT), []);
+  const atlasBounds = useMemo(() => rectToLatLngBounds(MAP_IMAGE_CONTENT_BOUNDS), []);
   const imageBounds = useMemo(() => getImageBoundsLatLng(), []);
 
   const loadMapData = useCallback(async () => {
@@ -611,7 +438,7 @@ export default function DispatchMap() {
           setCursorMapCoords(null);
           return;
         }
-        setCursorMapCoords(rawImageToWorldPoint(imagePoint.x, imagePoint.y));
+        setCursorMapCoords(imagePoint);
         setCursorWorld(imageToWorldPoint(imagePoint.x, imagePoint.y));
       };
       const onMouseOut = () => {
@@ -788,8 +615,8 @@ export default function DispatchMap() {
     map.flyTo(target, Math.max(map.getZoom(), atlasFitZoom + 0.8), { animate: true, duration: 0.35 });
   };
 
-  const atlasCoveragePct = Math.round((MAP_ATLAS_RECT.width / MAP_IMAGE_SIZE.width) * 1000) / 10;
-  const atlasRectText = `${Math.round(MAP_ATLAS_RECT.x)},${Math.round(MAP_ATLAS_RECT.y)} ${Math.round(MAP_ATLAS_RECT.width)}x${Math.round(MAP_ATLAS_RECT.height)}`;
+  const contentBoundsText = `${Math.round(MAP_IMAGE_CONTENT_BOUNDS.left)},${Math.round(MAP_IMAGE_CONTENT_BOUNDS.top)} ${Math.round(MAP_CONTENT_SIZE.width)}x${Math.round(MAP_CONTENT_SIZE.height)}`;
+  const atlasCanvasText = `${MAP_IMAGE_SIZE.width}x${MAP_IMAGE_SIZE.height} (${Math.round(MAP_IMAGE_SIZE.width / GTA_MAP_ATLAS_TILE_PX)}x${Math.round(MAP_IMAGE_SIZE.height / GTA_MAP_ATLAS_TILE_PX)} tiles @ ${GTA_MAP_ATLAS_TILE_PX}px)`;
   const unmappedCallsCount = Math.max(0, filteredCalls.length - callMarkers.length);
 
   return (
@@ -800,7 +627,7 @@ export default function DispatchMap() {
             <div className="text-xs uppercase tracking-wide text-cad-muted">Dispatch Operations</div>
             <h1 className="text-xl font-bold mt-1">AVL Map</h1>
             <p className="text-xs sm:text-sm text-cad-muted mt-1.5 max-w-3xl">
-              Leaflet-based dispatch map with a recalibrated GTA pause-map atlas overlay.
+              Rebuilt AVL map using a direct GTA/FiveM 2x3 tile atlas projection (no affine/manual warp calibration).
               {isDispatch ? '' : ' This view is primarily intended for dispatch centres.'}
             </p>
           </div>
@@ -850,7 +677,7 @@ export default function DispatchMap() {
             <div>
               <div className="font-semibold">Dispatch Area Map</div>
               <div className="text-[11px] text-cad-muted mt-0.5">
-                Calibrated to a 2x3 GTA/FiveM pause-map atlas (4500u tiles) inside `FullMap.png`
+                Direct 2x3 atlas projection (`4500u` per tile) on the full `FullMap.png` canvas
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -883,18 +710,25 @@ export default function DispatchMap() {
                   </button>
                 ))}
                 <span className="inline-flex items-center rounded-md border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1 text-[11px] text-cyan-100">
-                  Atlas coverage {atlasCoveragePct}%
+                  Visible map coverage {MAP_CONTENT_COVERAGE_PCT}%
                 </span>
                 <span className="inline-flex items-center rounded-md border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-cad-muted">
-                  Atlas rect {atlasRectText}
+                  Alpha bounds {contentBoundsText}
+                </span>
+                <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] ${
+                  MAP_CANVAS_IS_STANDARD_ATLAS
+                    ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100'
+                    : 'border-amber-400/25 bg-amber-400/10 text-amber-100'
+                }`}>
+                  Canvas {atlasCanvasText}
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={() => zoomBy(-0.35)} className="px-2.5 py-1 rounded-md border border-cad-border bg-cad-surface text-xs">-</button>
                 <div className="min-w-[68px] text-center text-xs text-cad-muted">{mapUi.ready ? `${mapUi.zoomPercent}%` : '...'}</div>
                 <button type="button" onClick={() => zoomBy(0.35)} className="px-2.5 py-1 rounded-md border border-cad-border bg-cad-surface text-xs">+</button>
-                <button type="button" onClick={fitAtlasView} className="px-2.5 py-1 rounded-md border border-cad-border bg-cad-surface text-xs">Fit Atlas</button>
-                <button type="button" onClick={fitWholeView} className="px-2.5 py-1 rounded-md border border-cad-border bg-cad-surface text-xs">Whole Map</button>
+                <button type="button" onClick={fitAtlasView} className="px-2.5 py-1 rounded-md border border-cad-border bg-cad-surface text-xs">Fit Visible Map</button>
+                <button type="button" onClick={fitWholeView} className="px-2.5 py-1 rounded-md border border-cad-border bg-cad-surface text-xs">Whole Canvas</button>
                 <button
                   type="button"
                   onClick={centerSelected}
@@ -913,10 +747,10 @@ export default function DispatchMap() {
                   {cursorWorld ? (
                     <div className="space-y-0.5">
                       <div className="text-slate-100">World X {Math.round(cursorWorld.x)} | Y {Math.round(cursorWorld.y)}</div>
-                      <div className="text-cyan-100/90">Map X {Math.round(cursorMapCoords?.x || 0)} | Y {Math.round(cursorMapCoords?.y || 0)}</div>
+                      <div className="text-cyan-100/90">Image PX X {Math.round(cursorMapCoords?.x || 0)} | Y {Math.round(cursorMapCoords?.y || 0)}</div>
                     </div>
                   ) : (
-                    <span className="text-cad-muted">Cursor outside calibrated atlas (image padding area)</span>
+                    <span className="text-cad-muted">Cursor outside visible map content (transparent canvas padding)</span>
                   )}
                 </div>
                 <div className="text-[11px] text-cad-muted mt-1">

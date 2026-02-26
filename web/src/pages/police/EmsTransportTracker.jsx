@@ -5,7 +5,7 @@ export default function EmsTransportTracker() {
     <EmsPatientWorkflowPage
       mode="transport"
       title="Hospital Transport Tracker"
-      subtitle="Focused EMS workflow for destination, ETA, transport status, and handover updates."
+      subtitle="Wasabi Ambulance-focused transport and handover workflow for destination, ETA, refusals, and hospital status."
     />
   );
 }

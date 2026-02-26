@@ -60,9 +60,9 @@ export default function EmsPatientWorkflowPage({
   const canSearch = query.length >= 2;
   const medicalCount = Math.max(0, Number(selectedPerson?.medical_analysis_count || 0));
   const workflowFocus = isTreatmentMode
-    ? 'Document on-scene findings, treatments, and patient response to care.'
+    ? 'Document on-scene findings, Wasabi treatment actions (CPR/revive/bandage), and patient response to care.'
     : isTransportMode
-      ? 'Track destination, transport status, ETA changes, and hospital handoff.'
+      ? 'Track Wasabi transport status, destination, ETA changes, refusals, and hospital handoff.'
       : 'Search a patient and document EMS care or transport updates.';
 
   async function doSearch(event) {
