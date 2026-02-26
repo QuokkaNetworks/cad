@@ -39,6 +39,18 @@ export const GTA_FULL_MAP_CONTENT_BOUNDS = {
   bottom: 8576,
 };
 
+// Ported from an existing Leaflet GTA V map CRS implementation and adapted as a
+// projection reference for the CAD postal map image.
+// Ref: https://github.com/RiceaRaul/gta-v-map-leaflet/blob/master/scripts/script.js
+export const GTA_LEAFLET_REFERENCE_CRS = {
+  centerX: 117.3,
+  centerY: 172.8,
+  scaleX: 0.02072,
+  scaleY: 0.0205,
+  referenceZoom: 5,
+  referencePlanePx: 8192, // 256 * 2^5
+};
+
 function clamp01(value) {
   if (!Number.isFinite(value)) return 0;
   if (value <= 0) return 0;
@@ -75,11 +87,7 @@ export function isGtaAtlasCanvasSize(imageSize) {
   return width === GTA_FULL_MAP_IMAGE_SIZE.width && height === GTA_FULL_MAP_IMAGE_SIZE.height;
 }
 
-export function createGtaAtlasProjection({
-  imageSize = GTA_FULL_MAP_IMAGE_SIZE,
-  imageRect = null,
-  worldBounds = GTA_DEFAULT_WORLD_BOUNDS,
-} = {}) {
+function normalizeImageRect(imageSize, imageRect = null) {
   const width = Math.max(1, Number(imageSize?.width) || 1);
   const height = Math.max(1, Number(imageSize?.height) || 1);
   const rectLeftRaw = Number(imageRect?.left);
@@ -96,6 +104,89 @@ export function createGtaAtlasProjection({
   const imageMaxY = Math.max(imageMinY + 1, Math.min(height, rectBottom));
   const imageWorldWidth = Math.max(1, imageMaxX - imageMinX);
   const imageWorldHeight = Math.max(1, imageMaxY - imageMinY);
+  return {
+    width,
+    height,
+    imageMinX,
+    imageMinY,
+    imageMaxX,
+    imageMaxY,
+    imageWorldWidth,
+    imageWorldHeight,
+  };
+}
+
+export function createGtaLeafletReferenceProjection({
+  imageSize = GTA_FULL_MAP_IMAGE_SIZE,
+  imageRect = null,
+  crs = GTA_LEAFLET_REFERENCE_CRS,
+} = {}) {
+  const {
+    imageMinX,
+    imageMinY,
+    imageWorldWidth,
+    imageWorldHeight,
+  } = normalizeImageRect(imageSize, imageRect);
+
+  const centerX = Number(crs?.centerX || 0);
+  const centerY = Number(crs?.centerY || 0);
+  const scaleX = Number(crs?.scaleX || 0.02072);
+  const scaleY = Number(crs?.scaleY || 0.0205);
+  const referenceZoom = Number.isFinite(Number(crs?.referenceZoom)) ? Number(crs.referenceZoom) : 5;
+  const zoomScale = Math.pow(2, referenceZoom);
+  const referencePlanePx = Math.max(1, Number(crs?.referencePlanePx) || (256 * zoomScale));
+
+  const worldToReferencePlane = (x, y) => ({
+    x: ((scaleX * x) + centerX) * zoomScale,
+    y: ((-scaleY * y) + centerY) * zoomScale,
+  });
+
+  const referencePlaneToWorld = (x, y) => ({
+    x: ((x / zoomScale) - centerX) / scaleX,
+    y: (centerY - (y / zoomScale)) / scaleY,
+  });
+
+  return {
+    worldToImagePoint(point) {
+      const x = Number(point?.x);
+      const y = Number(point?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return { x: 0, y: 0 };
+      const ref = worldToReferencePlane(x, y);
+      return {
+        x: imageMinX + ((ref.x / referencePlanePx) * imageWorldWidth),
+        y: imageMinY + ((ref.y / referencePlanePx) * imageWorldHeight),
+      };
+    },
+
+    imageToWorldPoint(point) {
+      const x = Number(point?.x);
+      const y = Number(point?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return { x: 0, y: 0 };
+      const refX = ((x - imageMinX) / imageWorldWidth) * referencePlanePx;
+      const refY = ((y - imageMinY) / imageWorldHeight) * referencePlanePx;
+      return referencePlaneToWorld(refX, refY);
+    },
+
+    worldDistanceToImagePixels(distance) {
+      const d = Math.max(0, Number(distance || 0));
+      const sx = Math.abs(scaleX) * zoomScale * (imageWorldWidth / referencePlanePx);
+      const sy = Math.abs(scaleY) * zoomScale * (imageWorldHeight / referencePlanePx);
+      return Math.max(1, d * Math.min(sx, sy));
+    },
+  };
+}
+
+export function createGtaAtlasProjection({
+  imageSize = GTA_FULL_MAP_IMAGE_SIZE,
+  imageRect = null,
+  worldBounds = GTA_DEFAULT_WORLD_BOUNDS,
+} = {}) {
+  const {
+    imageMinX,
+    imageMinY,
+    imageWorldWidth,
+    imageWorldHeight,
+  } = normalizeImageRect(imageSize, imageRect);
   const minX = Number(worldBounds?.minX || 0);
   const maxX = Number(worldBounds?.maxX || 0);
   const minY = Number(worldBounds?.minY || 0);

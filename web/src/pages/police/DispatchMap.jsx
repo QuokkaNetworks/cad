@@ -10,7 +10,7 @@ import {
   GTA_DEFAULT_WORLD_BOUNDS as WORLD_BOUNDS,
   GTA_FULL_MAP_IMAGE_SIZE as MAP_IMAGE_SIZE,
   GTA_FULL_MAP_CONTENT_BOUNDS as MAP_IMAGE_CONTENT_BOUNDS,
-  createGtaAtlasProjection,
+  createGtaLeafletReferenceProjection,
   getRectSize,
   isGtaAtlasCanvasSize,
   isPointInsideRect,
@@ -22,10 +22,9 @@ const MAP_FIT_PADDING_PX = [16, 16];
 const MAP_WHOLE_PADDING_PX = [8, 8];
 const LEAFLET_DEFAULT_MIN_ZOOM = -2;
 const LEAFLET_MAX_ZOOM = 4.5;
-const MAP_PROJECTION = createGtaAtlasProjection({
+const MAP_PROJECTION = createGtaLeafletReferenceProjection({
   imageSize: MAP_IMAGE_SIZE,
   imageRect: MAP_IMAGE_CONTENT_BOUNDS,
-  worldBounds: WORLD_BOUNDS,
 });
 const MAP_CANVAS_IS_STANDARD_ATLAS = isGtaAtlasCanvasSize(MAP_IMAGE_SIZE);
 const MAP_CONTENT_SIZE = getRectSize(MAP_IMAGE_CONTENT_BOUNDS);
@@ -681,7 +680,7 @@ export default function DispatchMap() {
             <div>
               <div className="font-semibold">Dispatch Area Map</div>
               <div className="text-[11px] text-cad-muted mt-0.5">
-                Projection uses standard GTA V/FiveM world bounds mapped into the visible `FullMap.png` content area
+                Postal map projection rebuilt using a proven GTA V Leaflet CRS transform adapted to `FullMap.png`
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
