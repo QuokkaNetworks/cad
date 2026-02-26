@@ -513,7 +513,6 @@ export default function DepartmentHome() {
     if (isDispatch) {
       return [
         { label: 'Dispatch Board', sublabel: 'Live call management', route: '/dispatch', variant: 'primary' },
-        { label: 'AVL Map', route: '/map' },
         { label: 'Lookup', route: '/search' },
         { label: 'Units', route: '/units' },
       ];
@@ -533,7 +532,6 @@ export default function DepartmentHome() {
     if (isEmsDepartment) {
       return [
         { label: 'Response Board', sublabel: 'Live crew and call management', route: '/units', variant: 'primary' },
-        { label: 'AVL Map', route: '/map' },
         { label: 'Incidents', route: '/incidents' },
         { label: 'Treatment Log', route: '/ems-treatment' },
         { label: 'Transport Tracker', route: '/ems-transport' },
@@ -543,7 +541,6 @@ export default function DepartmentHome() {
     if (isFireDepartment) {
       return [
         { label: 'Response Board', sublabel: 'Live appliance and incident management', route: '/units', variant: 'primary' },
-        { label: 'AVL Map', route: '/map' },
         { label: 'Incidents', route: '/incidents' },
         { label: 'Incident Reports', route: '/records' },
         { label: 'Lookup', route: '/search' },
@@ -606,7 +603,6 @@ export default function DepartmentHome() {
           body: 'Call triage, macros, priority tones, pursuit tracking, and unit allocation.',
           actions: [
             { label: 'Open Dispatch Board', route: '/dispatch', variant: 'primary' },
-            { label: 'AVL Map', route: '/map' },
             { label: 'Lookup', route: '/search' },
           ],
         },
@@ -617,7 +613,6 @@ export default function DepartmentHome() {
           body: 'Monitor available units, active incidents, and escalation workload from the live overview.',
           actions: [
             { label: 'Units', route: '/units' },
-            { label: 'AVL Map', route: '/map' },
           ],
         },
       ];
@@ -628,10 +623,9 @@ export default function DepartmentHome() {
           key: 'ems-response',
           eyebrow: 'Response',
           title: 'Live ambulance operations',
-          body: 'Use the Response Board and AVL Map for dispatching crews, scene coordination, and status updates during active jobs.',
+          body: 'Use the Response Board for dispatching crews, scene coordination, and status updates during active jobs.',
           actions: [
             { label: 'Response Board', route: '/units', variant: 'primary' },
-            { label: 'AVL Map', route: '/map' },
             { label: 'Incidents', route: '/incidents' },
           ],
         },
@@ -658,7 +652,6 @@ export default function DepartmentHome() {
           body: 'Run appliance and crew response from the board, monitor incident load, and keep active jobs moving cleanly in-game.',
           actions: [
             { label: 'Response Board', route: '/units', variant: 'primary' },
-            { label: 'AVL Map', route: '/map' },
             { label: 'Incidents', route: '/incidents' },
           ],
         },
@@ -877,7 +870,7 @@ export default function DepartmentHome() {
       return [
         'Monitor new calls, timers, and priority alerts on the dispatch board.',
         'Allocate the closest available units and monitor pursuits or alarms.',
-        'Use lookup and AVL mapping to support live coordination decisions.',
+        'Use lookup to support live coordination decisions.',
       ];
     }
     if (isPoliceDepartment) {
@@ -889,7 +882,7 @@ export default function DepartmentHome() {
     }
     if (isEmsDepartment) {
       return [
-        'Run live jobs from the Response Board and AVL Map.',
+        'Run live jobs from the Response Board.',
         'Record treatment and transport details after scene care.',
         'Complete a patient report and link the job to an incident when needed.',
       ];
