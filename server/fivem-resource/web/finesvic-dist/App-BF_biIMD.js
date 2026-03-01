@@ -1,6 +1,6 @@
 import { importShared as V, __tla as __tla_0 } from "./__federation_fn_import-C_7gNWqI.js";
 import { r as q } from "./index-CtmpQeow.js";
-let de, t, Z;
+let ce, t, Z;
 let __tla = Promise.all([
   (() => {
     try {
@@ -18,36 +18,39 @@ let __tla = Promise.all([
     __self: true,
     __source: true
   };
-  function F(e, r, s) {
-    var i, n = {}, c = null, d = null;
-    s !== void 0 && (c = "" + s), r.key !== void 0 && (c = "" + r.key), r.ref !== void 0 && (d = r.ref);
+  function E(e, r, d) {
+    var i, n = {}, l = null, c = null;
+    d !== void 0 && (l = "" + d), r.key !== void 0 && (l = "" + r.key), r.ref !== void 0 && (c = r.ref);
     for (i in r) G.call(r, i) && !K.hasOwnProperty(i) && (n[i] = r[i]);
     if (e && e.defaultProps) for (i in r = e.defaultProps, r) n[i] === void 0 && (n[i] = r[i]);
     return {
       $$typeof: H,
       type: e,
-      key: c,
-      ref: d,
+      key: l,
+      ref: c,
       props: n,
       _owner: Y.current
     };
   }
   w.Fragment = J;
-  w.jsx = F;
-  w.jsxs = F;
+  w.jsx = E;
+  w.jsxs = E;
   I.exports = w;
   t = I.exports;
-  let j, Q, X;
+  let R, Q;
   Z = "" + new URL("FinesVicLogo-CZ7ggJBL.jpg", import.meta.url).href;
-  j = "cad_bridge";
-  Q = typeof import.meta < "u" && true;
-  X = Q ? [
-    `https://cfx-nui-${j}`
-  ] : [
-    `https://cfx-nui-${j}`,
-    `https://${j}`
+  R = "cad_bridge";
+  Q = [
+    `https://cfx-nui-${R}`,
+    `https://${R}`
   ];
+  function X(e) {
+    return !!e && typeof e == "object" && !Array.isArray(e) && Object.keys(e).length === 0;
+  }
   function ee(e) {
+    return !e || typeof e != "object" || Array.isArray(e) ? false : "ok" in e || "success" in e || "error" in e || "message" in e || "payload" in e || "notice" in e || "notices" in e || "summary" in e;
+  }
+  function te(e) {
     const r = Math.max(1e3, Number(e) || 1e4);
     if (typeof AbortController > "u") return {
       signal: void 0,
@@ -55,15 +58,15 @@ let __tla = Promise.all([
       },
       timeout: r
     };
-    const s = new AbortController(), i = setTimeout(() => s.abort(new Error("Request timed out")), r);
+    const d = new AbortController(), i = setTimeout(() => d.abort(new Error("Request timed out")), r);
     return {
-      signal: s.signal,
+      signal: d.signal,
       timeout: r,
       cancel: () => clearTimeout(i)
     };
   }
-  async function te(e, r, s) {
-    const i = ee(s);
+  async function re(e, r, d) {
+    const i = te(d);
     try {
       const n = fetch(e, {
         method: "POST",
@@ -74,63 +77,67 @@ let __tla = Promise.all([
         credentials: "omit",
         signal: i.signal,
         body: JSON.stringify(r || {})
-      }), c = new Promise((S, y) => {
-        setTimeout(() => y(new Error("CAD bridge request timed out")), i.timeout || Math.max(1e3, Number(s) || 1e4));
-      }), d = await Promise.race([
+      }), l = new Promise((S, y) => {
+        setTimeout(() => y(new Error("CAD bridge request timed out")), i.timeout || Math.max(1e3, Number(d) || 1e4));
+      }), c = await Promise.race([
         n,
-        c
-      ]), l = await d.text();
+        l
+      ]), s = await c.text();
       let p = null;
       try {
-        p = JSON.parse(l || "{}");
+        p = JSON.parse(s || "{}");
       } catch {
         p = null;
       }
-      return d.ok ? p || {
+      return c.ok ? p || {
         ok: false,
         error: "invalid_json",
-        message: l || "Invalid response from CAD bridge"
+        message: s || "Invalid response from CAD bridge"
       } : p || {
         ok: false,
         error: "http_error",
-        status: d.status,
-        message: l || `CAD bridge request failed (${d.status})`
+        status: c.status,
+        message: s || `CAD bridge request failed (${c.status})`
       };
     } catch (n) {
-      const c = String(n?.name || "").toLowerCase() === "aborterror";
-      throw new Error(c ? "CAD bridge request timed out" : String(n?.message || n || "CAD bridge request failed"));
+      const l = String(n?.name || "").toLowerCase() === "aborterror";
+      throw new Error(l ? "CAD bridge request timed out" : String(n?.message || n || "CAD bridge request failed"));
     } finally {
       i.cancel();
     }
   }
-  async function $(e, r, s = {}) {
+  async function $(e, r, d = {}) {
     const i = String(e || "").trim();
     if (!i) return {
       ok: false,
       error: "invalid_event",
       message: "Missing CAD bridge event name"
     };
-    const n = Math.max(1e3, Number(s.timeoutMs) || 1e4);
-    let c = null;
-    for (const d of X) try {
-      const l = await te(`${d}/${i}`, r, n);
-      return l && typeof l == "object" && !l.__endpoint ? {
-        ...l,
-        __endpoint: d
-      } : l;
-    } catch (l) {
-      c = l;
+    const n = Math.max(1e3, Number(d.timeoutMs) || 1e4);
+    let l = null;
+    for (const c of Q) try {
+      const s = await re(`${c}/${i}`, r, n);
+      if (X(s) || !ee(s)) {
+        l = new Error(`Invalid CAD bridge callback payload from ${c}`);
+        continue;
+      }
+      return s && typeof s == "object" && !s.__endpoint ? {
+        ...s,
+        __endpoint: c
+      } : s;
+    } catch (s) {
+      l = s;
     }
     return {
       ok: false,
       error: "bridge_unreachable",
-      message: String(c?.message || "Unable to contact CAD bridge")
+      message: String(l?.message || "Unable to contact CAD bridge")
     };
   }
-  const re = await V("react"), { useEffect: D, useState: m } = re, A = "__quokkaFinesVicDialogBlockInstalled";
-  function ne() {
-    if (!(typeof window > "u") && !window[A]) {
-      window[A] = true;
+  const ne = await V("react"), { useEffect: A, useState: m } = ne, D = "__quokkaFinesVicDialogBlockInstalled";
+  function ie() {
+    if (!(typeof window > "u") && !window[D]) {
+      window[D] = true;
       try {
         window.alert = () => {
         }, window.confirm = () => false, window.prompt = () => null;
@@ -138,7 +145,7 @@ let __tla = Promise.all([
       }
     }
   }
-  ne();
+  ie();
   function _(e) {
     const r = Number(e || 0);
     if (!Number.isFinite(r)) return "$0";
@@ -155,19 +162,19 @@ let __tla = Promise.all([
   function z(e) {
     const r = String(e || "").trim();
     if (!r) return "";
-    const s = Date.parse(r);
-    if (!Number.isFinite(s)) return r;
+    const d = Date.parse(r);
+    if (!Number.isFinite(d)) return r;
     try {
       return new Intl.DateTimeFormat("en-AU", {
         day: "2-digit",
         month: "short",
         year: "numeric"
-      }).format(new Date(s));
+      }).format(new Date(d));
     } catch {
       return r;
     }
   }
-  function ie(e) {
+  function oe(e) {
     if (e?.can_pay_online) return {
       bg: "rgba(22,163,74,0.18)",
       border: "rgba(34,197,94,0.34)",
@@ -188,7 +195,7 @@ let __tla = Promise.all([
       text: "#cbd5e1"
     };
   }
-  function oe({ status: e }) {
+  function ae({ status: e }) {
     if (!e?.message) return null;
     const r = e.type === "error" ? {
       border: "rgba(239,68,68,0.35)",
@@ -217,8 +224,8 @@ let __tla = Promise.all([
       children: e.message
     });
   }
-  function T({ notice: e, payingNoticeId: r, onPay: s }) {
-    const i = ie(e), n = Number(r) === Number(e?.id), c = String(e?.payable_status || "").replace(/_/g, " ").trim() || "unknown", d = z(e?.due_date), l = z(e?.court_date);
+  function T({ notice: e, payingNoticeId: r, onPay: d }) {
+    const i = oe(e), n = Number(r) === Number(e?.id), l = String(e?.payable_status || "").replace(/_/g, " ").trim() || "unknown", c = z(e?.due_date), s = z(e?.court_date);
     return t.jsxs("div", {
       style: {
         borderRadius: 14,
@@ -292,13 +299,13 @@ let __tla = Promise.all([
                     letterSpacing: "0.05em",
                     display: "inline-block"
                   },
-                  children: e?.can_pay_online ? "Pay Online" : c
+                  children: e?.can_pay_online ? "Pay Online" : l
                 })
               ]
             })
           ]
         }),
-        (d || l || e?.department_short_name) && t.jsxs("div", {
+        (c || s || e?.department_short_name) && t.jsxs("div", {
           style: {
             display: "flex",
             flexWrap: "wrap",
@@ -316,7 +323,7 @@ let __tla = Promise.all([
               },
               children: e.department_short_name
             }),
-            d && t.jsxs("span", {
+            c && t.jsxs("span", {
               style: {
                 fontSize: 10.5,
                 color: "#e5e7eb",
@@ -326,10 +333,10 @@ let __tla = Promise.all([
               },
               children: [
                 "Due ",
-                d
+                c
               ]
             }),
-            l && t.jsxs("span", {
+            s && t.jsxs("span", {
               style: {
                 fontSize: 10.5,
                 color: "#fde68a",
@@ -340,7 +347,7 @@ let __tla = Promise.all([
               },
               children: [
                 "Court ",
-                l
+                s
               ]
             })
           ]
@@ -355,7 +362,7 @@ let __tla = Promise.all([
         }),
         e?.can_pay_online ? t.jsx("button", {
           type: "button",
-          onClick: () => s(e),
+          onClick: () => d(e),
           disabled: n,
           style: {
             border: "1px solid rgba(234,179,8,0.35)",
@@ -384,19 +391,19 @@ let __tla = Promise.all([
       ]
     });
   }
-  de = function() {
-    const [e, r] = m(false), [s, i] = m(false), [n, c] = m(0), [d, l] = m(null), [p, S] = m([]), [y, v] = m({
+  ce = function() {
+    const [e, r] = m(false), [d, i] = m(false), [n, l] = m(0), [c, s] = m(null), [p, S] = m([]), [y, j] = m({
       total_outstanding: 0,
       payable_count: 0,
       total_notices: 0
-    }), [E, O] = m("bank"), [N, L] = m(""), [W, f] = m({
+    }), [F, O] = m("bank"), [k, L] = m(""), [W, f] = m({
       type: "info",
       message: "Load your infringement notices and pay eligible fines online through Fines Victoria."
     });
-    D(() => {
+    A(() => {
       if (typeof window > "u") return;
       const a = window.alert, o = window.confirm, g = window.prompt, u = (b, x) => {
-        const R = String(x || "").trim(), U = R ? ` (${R.slice(0, 180)})` : "";
+        const P = String(x || "").trim(), U = P ? ` (${P.slice(0, 180)})` : "";
         f({
           type: "error",
           message: `A native browser ${b} dialog was blocked inside the phone app${U}. This usually means an old app bundle or browser fallback path was triggered.`
@@ -413,7 +420,7 @@ let __tla = Promise.all([
       };
     }, []);
     async function h({ silent: a = false } = {}) {
-      if (!(e || s || n > 0)) {
+      if (!(e || d || n > 0)) {
         a ? i(true) : r(true), a || f({
           type: "info",
           message: "Loading your infringement notices..."
@@ -423,7 +430,7 @@ let __tla = Promise.all([
             timeoutMs: 15e3
           });
           if (!(o?.ok === true || o?.success === true)) {
-            S([]), v({
+            S([]), j({
               total_outstanding: 0,
               payable_count: 0,
               total_notices: 0
@@ -434,7 +441,7 @@ let __tla = Promise.all([
             return;
           }
           const u = Array.isArray(o?.notices) ? o.notices : [];
-          S(u), v({
+          S(u), j({
             total_outstanding: Number(o?.summary?.total_outstanding || 0) || 0,
             payable_count: Number(o?.summary?.payable_count || 0) || 0,
             total_notices: Number(o?.summary?.total_notices || u.length || 0) || 0
@@ -458,20 +465,20 @@ let __tla = Promise.all([
         }
       }
     }
-    D(() => {
+    A(() => {
       h();
     }, []);
-    async function k(a) {
-      !Number(a?.id || 0) || n > 0 || a?.can_pay_online === true && l(a);
+    async function N(a) {
+      !Number(a?.id || 0) || n > 0 || a?.can_pay_online === true && s(a);
     }
     async function B() {
-      const a = d, o = Number(a?.id || 0);
+      const a = c, o = Number(a?.id || 0);
       if (!(!o || n > 0)) {
         if (a?.can_pay_online !== true) {
-          l(null);
+          s(null);
           return;
         }
-        l(null), c(o), f({
+        s(null), l(o), f({
           type: "info",
           message: `Processing payment for ${String(a?.notice_number || `Notice #${o}`)}...`
         });
@@ -507,11 +514,11 @@ let __tla = Promise.all([
             message: `Payment failed: ${String(g?.message || g || "unknown error")}`
           });
         } finally {
-          c(0);
+          l(0);
         }
       }
     }
-    const C = p.filter((a) => a?.can_pay_online), P = p.filter((a) => !a?.can_pay_online);
+    const v = p.filter((a) => a?.can_pay_online), C = p.filter((a) => !a?.can_pay_online);
     return t.jsxs("div", {
       style: {
         height: "100%",
@@ -573,7 +580,7 @@ let __tla = Promise.all([
                   },
                   children: [
                     "Pay infringement notices online",
-                    N ? ` \u2022 ${N}` : ""
+                    k ? ` \u2022 ${k}` : ""
                   ]
                 })
               ]
@@ -583,7 +590,7 @@ let __tla = Promise.all([
               onClick: () => h({
                 silent: false
               }),
-              disabled: e || s || n > 0,
+              disabled: e || d || n > 0,
               style: {
                 borderRadius: 10,
                 border: "1px solid rgba(245,200,76,0.25)",
@@ -592,10 +599,10 @@ let __tla = Promise.all([
                 fontSize: 11.5,
                 fontWeight: 700,
                 padding: "7px 10px",
-                cursor: e || s || n > 0 ? "default" : "pointer",
-                opacity: e || s || n > 0 ? 0.7 : 1
+                cursor: e || d || n > 0 ? "default" : "pointer",
+                opacity: e || d || n > 0 ? 0.7 : 1
               },
-              children: e || s ? "Refreshing..." : "Refresh"
+              children: e || d ? "Refreshing..." : "Refresh"
             })
           ]
         }),
@@ -672,7 +679,7 @@ let __tla = Promise.all([
                         },
                         children: [
                           "Debit account: ",
-                          String(E || "bank")
+                          String(F || "bank")
                         ]
                       })
                     ]
@@ -680,10 +687,10 @@ let __tla = Promise.all([
                 ]
               })
             }),
-            t.jsx(oe, {
+            t.jsx(ae, {
               status: W
             }),
-            d ? t.jsxs("div", {
+            c ? t.jsxs("div", {
               style: {
                 borderRadius: 14,
                 border: "1px solid rgba(245,200,76,0.28)",
@@ -712,12 +719,12 @@ let __tla = Promise.all([
                   children: [
                     "Pay ",
                     t.jsx("strong", {
-                      children: _(d?.amount)
+                      children: _(c?.amount)
                     }),
                     " for",
                     " ",
                     t.jsx("strong", {
-                      children: String(d?.notice_number || `Notice #${d?.id || "?"}`)
+                      children: String(c?.notice_number || `Notice #${c?.id || "?"}`)
                     }),
                     "?"
                   ]
@@ -730,7 +737,7 @@ let __tla = Promise.all([
                   children: [
                     t.jsx("button", {
                       type: "button",
-                      onClick: () => l(null),
+                      onClick: () => s(null),
                       disabled: n > 0,
                       style: {
                         flex: 1,
@@ -776,7 +783,7 @@ let __tla = Promise.all([
               },
               children: "Loading notices..."
             }) : null,
-            C.length > 0 && t.jsxs("div", {
+            v.length > 0 && t.jsxs("div", {
               style: {
                 display: "grid",
                 gap: 8
@@ -792,14 +799,14 @@ let __tla = Promise.all([
                   },
                   children: "Pay Online Now"
                 }),
-                C.map((a) => t.jsx(T, {
+                v.map((a) => t.jsx(T, {
                   notice: a,
                   payingNoticeId: n,
-                  onPay: k
+                  onPay: N
                 }, `payable-${a.id}`))
               ]
             }),
-            P.length > 0 && t.jsxs("div", {
+            C.length > 0 && t.jsxs("div", {
               style: {
                 display: "grid",
                 gap: 8
@@ -815,10 +822,10 @@ let __tla = Promise.all([
                   },
                   children: "Other Notices"
                 }),
-                P.map((a) => t.jsx(T, {
+                C.map((a) => t.jsx(T, {
                   notice: a,
                   payingNoticeId: n,
-                  onPay: k
+                  onPay: N
                 }, `other-${a.id}`))
               ]
             }),
@@ -841,7 +848,7 @@ let __tla = Promise.all([
   };
 });
 export {
-  de as A,
+  ce as A,
   __tla,
   t as j,
   Z as l

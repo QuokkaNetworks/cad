@@ -4,6 +4,17 @@ const CAD_BRIDGE_ENDPOINTS = [
   `https://${CAD_BRIDGE_RESOURCE}`,
 ];
 
+function isEmptyObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0;
+}
+
+function looksLikeCadBridgePayload(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  if ('ok' in value || 'success' in value || 'error' in value || 'message' in value) return true;
+  if ('payload' in value || 'notice' in value || 'notices' in value || 'summary' in value) return true;
+  return false;
+}
+
 function withTimeout(timeoutMs) {
   const timeout = Math.max(1000, Number(timeoutMs) || 10000);
   if (typeof AbortController === 'undefined') {
@@ -71,7 +82,12 @@ export async function fetchCadBridgeNui(eventName, data, options = {}) {
   let lastErr = null;
   for (const baseUrl of CAD_BRIDGE_ENDPOINTS) {
     try {
-      return await postJson(`${baseUrl}/${event}`, data, timeoutMs);
+      const response = await postJson(`${baseUrl}/${event}`, data, timeoutMs);
+      if (isEmptyObject(response) || !looksLikeCadBridgePayload(response)) {
+        lastErr = new Error(`Invalid CAD bridge callback payload from ${baseUrl}`);
+        continue;
+      }
+      return response;
     } catch (err) {
       lastErr = err;
     }

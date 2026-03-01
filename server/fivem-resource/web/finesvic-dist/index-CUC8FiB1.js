@@ -1,5 +1,5 @@
 import { importShared as e, __tla as __tla_0 } from "./__federation_fn_import-C_7gNWqI.js";
-import { __tla as __tla_1 } from "./App-BCybjJIx.js";
+import { __tla as __tla_1 } from "./App-BF_biIMD.js";
 import { r } from "./index-BRrI07Qo.js";
 Promise.all([
   (() => {

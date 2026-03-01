@@ -1,4 +1,4 @@
-let E, y, T;
+let E, v, T;
 let __tla = (async () => {
   const g = {}, b = /* @__PURE__ */ new Set([
     "Module",
@@ -7,7 +7,7 @@ let __tla = (async () => {
     "_export_sfc"
   ]);
   let p = {
-    "./config": () => (E([], false, "./config"), v("./__federation_expose_Config-DNSaATdC.js").then((e) => Object.keys(e).every((o) => b.has(o)) ? () => e.default : () => e))
+    "./config": () => (E([], false, "./config"), y("./__federation_expose_Config-BTBuanje.js").then((e) => Object.keys(e).every((o) => b.has(o)) ? () => e.default : () => e))
   };
   let m;
   m = {};
@@ -48,13 +48,13 @@ let __tla = (async () => {
       f.rel = "stylesheet", f.href = n, document.head.appendChild(f);
     });
   };
-  async function v(e) {
+  async function y(e) {
     return g[e] ?? (g[e] = import(e).then(async (m2) => {
       await m2.__tla;
       return m2;
     })), g[e];
   }
-  y = (e) => {
+  v = (e) => {
     if (!p[e]) throw new Error("Can not find remote module " + e);
     return p[e]();
   };
@@ -72,6 +72,6 @@ let __tla = (async () => {
 export {
   __tla,
   E as dynamicLoadingCss,
-  y as get,
+  v as get,
   T as init
 };
