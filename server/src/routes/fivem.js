@@ -88,9 +88,9 @@ const BRIDGE_MUGSHOT_UPLOAD_DIR = path.resolve(__dirname, '../../data/uploads/fi
 const BRIDGE_MUGSHOT_CHROMA_KEY_ENABLED = String(process.env.FIVEM_BRIDGE_MUGSHOT_CHROMA_KEY_ENABLED || 'false')
   .trim()
   .toLowerCase() === 'true';
-const BRIDGE_DOCUMENT_DEBUG_LOGS = String(process.env.FIVEM_BRIDGE_DOCUMENT_DEBUG_LOGS || 'true')
+const BRIDGE_DOCUMENT_DEBUG_LOGS = String(process.env.FIVEM_BRIDGE_DOCUMENT_DEBUG_LOGS || 'false')
   .trim()
-  .toLowerCase() !== 'false';
+  .toLowerCase() === 'true';
 const BRIDGE_LICENSE_LOG_TO_FILE = String(process.env.FIVEM_BRIDGE_LICENSE_LOG_TO_FILE || 'true')
   .trim()
   .toLowerCase() !== 'false';

@@ -15,29 +15,19 @@ export default function AuthCallback() {
       return;
     }
 
-    // Steam auth callback on port 3031 passes the JWT as ?token= so we can
-    // set the httpOnly cookie on this origin (the HTTPS SPA, port 3030).
-    const token = searchParams.get('token');
-    if (token) {
-      fetch('/api/auth/set-cookie', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ token }),
+    // Exchange one-time callback state for the auth cookie on this origin.
+    fetch('/api/auth/set-cookie', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({}),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error('auth_exchange_failed');
+        // Force a full reload so auth context initializes with the new cookie.
+        window.location.replace('/home');
       })
-        .then(() => {
-          // Use a full page reload instead of React Router navigate so that
-          // AuthProvider re-mounts fresh with the cookie already in place.
-          // Without this, ProtectedRoute sees the pre-cookie auth state
-          // (user=null) and redirects back to /login before the cookie lands.
-          window.location.replace('/home');
-        })
-        .catch(() => navigate('/login?error=auth_failed', { replace: true }));
-      return;
-    }
-
-    // No token in URL — already on the right origin, cookie was set server-side.
-    navigate('/home', { replace: true });
+      .catch(() => navigate('/login?error=auth_failed', { replace: true }));
   }, [searchParams, navigate]);
 
   return (

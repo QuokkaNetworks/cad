@@ -7,25 +7,25 @@ let __tla = (async () => {
     "_export_sfc"
   ]);
   let p = {
-    "./config": () => (E([], false, "./config"), y("./__federation_expose_Config-iRbXjlV8.js").then((e) => Object.keys(e).every((o) => b.has(o)) ? () => e.default : () => e))
+    "./config": () => (E([], false, "./config"), y("./__federation_expose_Config-BVd_rKeK.js").then((e) => Object.keys(e).every((o) => b.has(o)) ? () => e.default : () => e))
   };
   let m;
   m = {};
   E = (e, o, a) => {
-    const i = import.meta.url;
-    if (typeof i > "u") {
+    const r = import.meta.url;
+    if (typeof r > "u") {
       console.warn('The remote style takes effect only when the build.target option in the vite.config.ts file is higher than that of "es2020".');
       return;
     }
-    const r = i.substring(0, i.lastIndexOf("remoteEntry.js")), _ = "./";
+    const i = r.substring(0, r.lastIndexOf("remoteEntry.js")), _ = "./";
     "", e.forEach((l) => {
       let n = "";
-      const c = _ || r;
+      const c = _ || i;
       if (c) {
         const s = {
           trailing: (t) => t.endsWith("/") ? t.slice(0, -1) : t,
           leading: (t) => t.startsWith("/") ? t.slice(1) : t
-        }, w = (t) => t.startsWith("http") || t.startsWith("//"), d = s.trailing(c), h = s.leading(l), u = s.trailing(r);
+        }, w = (t) => t.startsWith("http") || t.startsWith("//"), d = s.trailing(c), h = s.leading(l), u = s.trailing(i);
         w(c) ? n = [
           d,
           h
@@ -38,7 +38,7 @@ let __tla = (async () => {
         ].filter(Boolean).join("/");
       } else n = l;
       if (o) {
-        const s = "css__npwd_fines_victoria__" + a;
+        const s = "css__npwd_vicroads__" + a;
         window[s] = window[s] || [], window[s].push(n);
         return;
       }
@@ -60,11 +60,11 @@ let __tla = (async () => {
   };
   T = (e) => {
     globalThis.__federation_shared__ = globalThis.__federation_shared__ || {}, Object.entries(e).forEach(([o, a]) => {
-      for (const [i, r] of Object.entries(a)) {
-        const _ = r.scope || "default";
+      for (const [r, i] of Object.entries(a)) {
+        const _ = i.scope || "default";
         globalThis.__federation_shared__[_] = globalThis.__federation_shared__[_] || {};
         const l = globalThis.__federation_shared__[_];
-        (l[o] = l[o] || {})[i] = r;
+        (l[o] = l[o] || {})[r] = i;
       }
     });
   };

@@ -1,5 +1,7 @@
 const express = require('express');
 const passport = require('passport');
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const config = require('../config');
 const { generateToken } = require('../auth/jwt');
 const { requireAuth, getUserFiveMOnlineStatus } = require('../auth/middleware');
@@ -9,6 +11,99 @@ const { getAnnouncementPermissionForUser } = require('../utils/announcementPermi
 const { getDepartmentLeaderScopeForUser } = require('../utils/departmentLeaderPermissions');
 
 const router = express.Router();
+const steamAuthExchangeById = new Map();
+
+function authExchangeCookieOptions(req) {
+  // This cookie is minted from the HTTP Steam callback listener (port 3031),
+  // so it cannot rely on `Secure`; keep it short-lived and one-time instead.
+  const options = {
+    httpOnly: true,
+    secure: false,
+    sameSite: config.auth.cookieSameSite || 'Lax',
+    path: '/',
+    maxAge: Number(config.auth.exchangeCookieMaxAgeMs || 0) || (5 * 60 * 1000),
+  };
+  if (config.auth.cookieDomain) {
+    options.domain = config.auth.cookieDomain;
+  }
+  return options;
+}
+
+function pruneSteamAuthExchanges() {
+  const now = Date.now();
+  for (const [exchangeId, entry] of steamAuthExchangeById.entries()) {
+    if (!entry || Number(entry.expires_at_ms || 0) <= now) {
+      steamAuthExchangeById.delete(exchangeId);
+    }
+  }
+}
+
+function issueSteamAuthExchange(userId) {
+  pruneSteamAuthExchanges();
+  const exchangeId = crypto.randomBytes(32).toString('base64url');
+  const expiresAtMs = Date.now() + (Number(config.auth.exchangeCookieMaxAgeMs || 0) || (5 * 60 * 1000));
+  steamAuthExchangeById.set(exchangeId, {
+    user_id: Number(userId || 0),
+    expires_at_ms: expiresAtMs,
+  });
+  return exchangeId;
+}
+
+function consumeSteamAuthExchange(exchangeId) {
+  pruneSteamAuthExchanges();
+  const id = String(exchangeId || '').trim();
+  if (!id) return null;
+  const entry = steamAuthExchangeById.get(id);
+  steamAuthExchangeById.delete(id);
+  if (!entry) return null;
+  if (Number(entry.expires_at_ms || 0) <= Date.now()) return null;
+  return entry;
+}
+
+function parseOriginFromUrl(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  try {
+    return new URL(text).origin;
+  } catch {
+    return '';
+  }
+}
+
+function isTrustedAuthRequestOrigin(req) {
+  const expectedOrigin = parseOriginFromUrl(config.webUrl);
+  if (!expectedOrigin) return false;
+
+  const candidates = [
+    String(req.headers.origin || '').trim(),
+    String(req.headers.referer || '').trim(),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (parseOriginFromUrl(candidate) === expectedOrigin) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function createDiscordOAuthState(userId) {
+  return jwt.sign(
+    { kind: 'discord_link', userId: Number(userId || 0) },
+    config.jwt.secret,
+    { expiresIn: '10m' }
+  );
+}
+
+function verifyDiscordOAuthState(rawState) {
+  const token = String(rawState || '').trim();
+  if (!token) throw new Error('missing_state');
+  const decoded = jwt.verify(token, config.jwt.secret);
+  if (!decoded || decoded.kind !== 'discord_link') throw new Error('invalid_state_kind');
+  const userId = Number(decoded.userId || 0);
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error('invalid_state_user');
+  return userId;
+}
 
 function authCookieOptions() {
   const options = {
@@ -28,36 +123,41 @@ function authCookieOptions() {
 router.get('/steam', passport.authenticate('steam', { session: false }));
 
 // Steam callback
-// Steam redirects the browser to the HTTP bridge port (3031) since self-signed
-// HTTPS certs cause ERR_EMPTY_RESPONSE. After verifying the OpenID assertion here,
-// we redirect to the HTTPS SPA (WEB_URL, port 3030) passing the JWT as a query
-// param so AuthCallback can POST it back to the HTTPS origin to set the cookie.
+// Steam can return to the HTTP bridge listener (3031). After verifying OpenID,
+// we mint a short-lived one-time exchange cookie, then redirect to WEB_URL where
+// AuthCallback exchanges it for the long-lived auth cookie on the web origin.
 router.get('/steam/callback',
   passport.authenticate('steam', { session: false, failureRedirect: `${config.webUrl}/login?error=steam_failed` }),
   (req, res) => {
-    const token = generateToken(req.user);
+    const exchangeId = issueSteamAuthExchange(req.user.id);
     audit(req.user.id, 'login', 'Steam login');
-    // Pass token in URL so the HTTPS SPA can set the cookie on its own origin.
-    res.redirect(`${config.webUrl}/auth/callback?token=${encodeURIComponent(token)}`);
+    res.cookie(config.auth.exchangeCookieName, exchangeId, authExchangeCookieOptions(req));
+    // Redirect to web callback without exposing auth tokens in URL parameters.
+    res.redirect(`${config.webUrl}/auth/callback`);
   }
 );
 
-// Called by AuthCallback on the HTTPS origin to exchange the URL token for a cookie.
-// This sets the httpOnly cookie on the correct origin (HTTPS port 3030).
+// Called by AuthCallback on the web origin to exchange a one-time Steam callback
+// cookie for a long-lived auth cookie.
 router.post('/set-cookie', (req, res) => {
-  const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
-  if (!token) return res.status(400).json({ error: 'Token required' });
-  const { verifyToken } = require('../auth/jwt');
-  let decoded;
-  try {
-    decoded = verifyToken(token);
-  } catch {
-    return res.status(401).json({ error: 'Invalid token' });
+  if (!req.is('application/json')) {
+    return res.status(415).json({ error: 'application/json required' });
   }
-  const { Users } = require('../db/sqlite');
-  const user = Users.findById(decoded.userId);
+  if (!isTrustedAuthRequestOrigin(req)) {
+    return res.status(403).json({ error: 'Origin not allowed' });
+  }
+
+  const exchangeId = String(req.cookies?.[config.auth.exchangeCookieName] || '').trim();
+  const exchange = consumeSteamAuthExchange(exchangeId);
+  if (!exchange) {
+    return res.status(401).json({ error: 'Invalid or expired login exchange' });
+  }
+
+  const user = Users.findById(exchange.user_id);
   if (!user || user.is_banned) return res.status(403).json({ error: 'Forbidden' });
+
   const refreshedToken = generateToken(user);
+  res.clearCookie(config.auth.exchangeCookieName, authExchangeCookieOptions(req));
   res.cookie(config.auth.cookieName, refreshedToken, authCookieOptions());
   res.json({ ok: true });
 });
@@ -113,7 +213,7 @@ router.post('/link-discord', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Discord OAuth not configured' });
   }
   const redirectUri = `${config.steam.realm}/api/auth/discord/callback`;
-  const state = Buffer.from(JSON.stringify({ userId: req.user.id })).toString('base64url');
+  const state = createDiscordOAuthState(req.user.id);
   const url = `https://discord.com/api/oauth2/authorize?client_id=${config.discord.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=identify&state=${state}`;
   res.json({ url });
 });
@@ -127,8 +227,7 @@ router.get('/discord/callback', async (req, res) => {
 
   let userId;
   try {
-    const decoded = JSON.parse(Buffer.from(state, 'base64url').toString());
-    userId = decoded.userId;
+    userId = verifyDiscordOAuthState(state);
   } catch {
     return res.redirect(`${config.webUrl}/settings?error=invalid_state`);
   }
@@ -202,6 +301,7 @@ router.post('/logout', (req, res) => {
   if (config.auth.cookieDomain) {
     options.domain = config.auth.cookieDomain;
   }
+  res.clearCookie(config.auth.exchangeCookieName, authExchangeCookieOptions(req));
   res.clearCookie(config.auth.cookieName, options);
   res.json({ success: true });
 });

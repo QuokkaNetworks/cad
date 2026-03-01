@@ -11,7 +11,7 @@
     "better-sqlite3": "^11.7.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
-    "discord.js": "^14.16.0",
+    "discord.js": "^14.25.1",
     "dotenv": "^16.4.0",
     "express": "^4.21.0",
     "express-rate-limit": "^7.5.0",
@@ -26,5 +26,14 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
+  },
+  "overrides": {
+    "undici": "^6.23.0",
+    "discord.js": {
+      "undici": "^6.23.0"
+    },
+    "@discordjs/rest": {
+      "undici": "^6.23.0"
+    }
   }
 }

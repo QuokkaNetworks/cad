@@ -34,6 +34,14 @@ function parseTrustProxyEnv(value, fallback = false) {
 }
 
 const nodeEnv = process.env.NODE_ENV || 'development';
+const configuredJwtSecret = String(process.env.JWT_SECRET || '').trim();
+const isDefaultJwtSecret = configuredJwtSecret === '' || configuredJwtSecret === 'change-me';
+if (nodeEnv === 'production' && isDefaultJwtSecret) {
+  throw new Error('[config] JWT_SECRET must be set to a strong non-default value in production.');
+}
+if (nodeEnv !== 'production' && isDefaultJwtSecret) {
+  console.warn('[config] JWT_SECRET is not set; using a development fallback secret.');
+}
 const steamRealm = normalizeBaseUrl(process.env.STEAM_REALM || 'http://localhost:3030');
 const steamReturnUrl = normalizeBaseUrl(process.env.STEAM_RETURN_URL || `${steamRealm}/api/auth/steam/callback`);
 
@@ -57,15 +65,17 @@ module.exports = {
   port: parseInt(process.env.PORT, 10) || 3030,
   nodeEnv,
   jwt: {
-    secret: process.env.JWT_SECRET || 'change-me',
+    secret: configuredJwtSecret || 'change-me-dev-fallback',
     expiresIn: String(process.env.JWT_EXPIRES_IN || process.env.AUTH_SESSION_EXPIRES_IN || '30d').trim() || '30d',
   },
   auth: {
     cookieName: process.env.AUTH_COOKIE_NAME || 'cad_token',
+    exchangeCookieName: process.env.AUTH_EXCHANGE_COOKIE_NAME || 'cad_auth_exchange',
     cookieSameSite: process.env.AUTH_COOKIE_SAMESITE || 'Lax',
     cookieSecure: parseBoolEnv(process.env.AUTH_COOKIE_SECURE, defaultCookieSecure),
     cookieDomain: process.env.AUTH_COOKIE_DOMAIN || '',
     cookieMaxAgeMs: Math.max(60 * 60 * 1000, parseIntEnv(process.env.AUTH_COOKIE_MAX_AGE_MS, 30 * 24 * 60 * 60 * 1000)),
+    exchangeCookieMaxAgeMs: Math.max(30 * 1000, parseIntEnv(process.env.AUTH_EXCHANGE_COOKIE_MAX_AGE_MS, 5 * 60 * 1000)),
   },
   steam: {
     apiKey: process.env.STEAM_API_KEY || '',
